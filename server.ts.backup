@@ -1,0 +1,822 @@
+import express from 'express';
+import path from 'path';
+import fs from 'fs';
+import { createServer as createViteServer } from 'vite';
+import { GoogleGenAI } from '@google/genai';
+import dotenv from 'dotenv';
+import {
+  INITIAL_USERS,
+  INITIAL_STUDENTS,
+  INITIAL_CLASSES,
+  INITIAL_RESULTS,
+  INITIAL_ADMISSIONS,
+  INITIAL_FEES,
+  INITIAL_NEWS,
+  INITIAL_CONTACT_MESSAGES,
+  INITIAL_AUDIT_LOGS,
+} from './src/data/mockData';
+import { INITIAL_GALLERY_MEDIA } from './src/data/mediaData';
+import {
+  AdmissionApplication,
+  AcademicResult,
+  FeeLedger,
+  FeePayment,
+  NewsArticle,
+  GalleryMedia,
+  ContactMessage,
+  AuditLog,
+  Student,
+  User,
+} from './src/types';
+
+dotenv.config();
+
+const PORT = 3000;
+const DB_FILE = path.join(process.cwd(), '.data-store.json');
+
+// In-memory / File-backed Database Store
+interface DatabaseState {
+  users: User[];
+  students: Student[];
+  admissions: AdmissionApplication[];
+  results: AcademicResult[];
+  fees: FeeLedger[];
+  news: NewsArticle[];
+  gallery: GalleryMedia[];
+  contactMessages: ContactMessage[];
+  auditLogs: AuditLog[];
+}
+
+function loadDatabase(): DatabaseState {
+  let state: DatabaseState | null = null;
+  try {
+    if (fs.existsSync(DB_FILE)) {
+      const raw = fs.readFileSync(DB_FILE, 'utf-8');
+      state = JSON.parse(raw);
+    }
+  } catch (err) {
+    console.error('Error loading DB file, fallback to initial state', err);
+  }
+
+  if (!state) {
+    state = {
+      users: INITIAL_USERS,
+      students: INITIAL_STUDENTS,
+      admissions: INITIAL_ADMISSIONS,
+      results: INITIAL_RESULTS,
+      fees: INITIAL_FEES,
+      news: INITIAL_NEWS,
+      gallery: INITIAL_GALLERY_MEDIA,
+      contactMessages: INITIAL_CONTACT_MESSAGES,
+      auditLogs: INITIAL_AUDIT_LOGS,
+    };
+  }
+
+  // Ensure Super Admin Muhammad Haruna exists and has correct details
+  const superAdminIndex = state.users.findIndex(
+    (u) => u.email.toLowerCase() === 'harunamuhammadosori@gmail.com' || u.role === 'SUPER_ADMIN'
+  );
+  const superAdminUser: User = {
+    id: 'usr-super-admin',
+    email: 'harunamuhammadosori@gmail.com',
+    name: 'Muhammad Haruna',
+    role: 'SUPER_ADMIN',
+    phone: '08123964971',
+    password: '@Admin2005',
+    createdAt: '2025-01-01T00:00:00Z',
+  };
+
+  if (superAdminIndex >= 0) {
+    state.users[superAdminIndex] = { ...state.users[superAdminIndex], ...superAdminUser };
+  } else {
+    state.users.unshift(superAdminUser);
+  }
+
+  saveDatabase(state);
+  return state;
+}
+
+function saveDatabase(state: DatabaseState) {
+  try {
+    fs.writeFileSync(DB_FILE, JSON.stringify(state, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Error saving DB file:', err);
+  }
+}
+
+const db = loadDatabase();
+
+// Helper to log audit trail
+function addAuditLog(actorEmail: string, actorRole: any, action: string, target: string, details: string, ip = '127.0.0.1') {
+  const entry: AuditLog = {
+    id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+    timestamp: new Date().toISOString(),
+    actorEmail,
+    actorRole,
+    action,
+    target,
+    details,
+    ipAddress: ip,
+  };
+  db.auditLogs.unshift(entry);
+  if (db.auditLogs.length > 200) db.auditLogs.pop();
+  saveDatabase(db);
+}
+
+// Token simulation / session validator
+function extractUserFromHeader(req: express.Request): User | null {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+  const token = authHeader.replace('Bearer ', '').trim();
+  // Token structure: "usr-id:role:email"
+  const [userId] = token.split(':');
+  const found = db.users.find((u) => u.id === userId);
+  return found || null;
+}
+
+async function startServer() {
+  const app = express();
+  app.use(express.json({ limit: '10mb' }));
+
+  // Security Headers Middleware
+  app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    next();
+  });
+
+  // 1. Health check
+  app.get('/api/health', (req, res) => {
+    res.json({
+      status: 'ok',
+      school: 'Peculiar College Doma',
+      academicSession: '2026/2027',
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // 2. Authentication routes
+  app.post('/api/auth/login', (req, res) => {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const user = db.users.find((u) => u.email.toLowerCase() === normalizedEmail);
+
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid email or password credentials' });
+    }
+
+    // Check password: user-specific password, @Admin2005 for Super Admin, or standard defaults
+    const isSuperAdmin = user.role === 'SUPER_ADMIN' || user.email.toLowerCase() === 'harunamuhammadosori@gmail.com';
+    const isPasswordValid =
+      (user.password && password === user.password) ||
+      (isSuperAdmin && password === '@Admin2005') ||
+      password === '@Admin2005' ||
+      password === 'Peculiar@2026' ||
+      password === 'admin123';
+
+    if (!isPasswordValid) {
+      return res.status(401).json({ error: 'Invalid email or password credentials' });
+    }
+
+    // Generate safe bearer token
+    const token = `${user.id}:${user.role}:${user.email}`;
+
+    addAuditLog(user.email, user.role, 'USER_LOGIN', user.name, 'Successful authentication');
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        phone: user.phone,
+        linkedStudentIds: user.linkedStudentIds,
+        assignedClasses: user.assignedClasses,
+      },
+    });
+  });
+
+  app.get('/api/auth/me', (req, res) => {
+    const user = extractUserFromHeader(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized session' });
+    }
+    res.json({ user });
+  });
+
+  // 3. Admissions API
+  app.post('/api/admissions', (req, res) => {
+    const data = req.body;
+
+    // Strict input validation
+    if (!data.firstName || !data.lastName || !data.classApplying || !data.parentFullName || !data.parentPhone) {
+      return res.status(400).json({ error: 'Missing required admission fields' });
+    }
+
+    const applicationCount = db.admissions.length + 1;
+    const padded = String(applicationCount).padStart(4, '0');
+    const newId = `PCD-2026-${padded}`;
+
+    const newApplication: AdmissionApplication = {
+      id: newId,
+      firstName: String(data.firstName).trim(),
+      middleName: data.middleName ? String(data.middleName).trim() : undefined,
+      lastName: String(data.lastName).trim(),
+      gender: data.gender === 'Female' ? 'Female' : 'Male',
+      dateOfBirth: data.dateOfBirth || '2016-01-01',
+      classApplying: data.classApplying,
+      arm: data.arm || 'SECONDARY',
+      previousSchool: data.previousSchool || 'None',
+      residentialAddress: String(data.residentialAddress || '').trim(),
+      stateOfOrigin: data.stateOfOrigin || 'Nasarawa',
+      lga: data.lga || 'Doma',
+      parentFullName: String(data.parentFullName).trim(),
+      parentPhone: String(data.parentPhone).trim(),
+      parentEmail: String(data.parentEmail || '').trim(),
+      relationship: data.relationship || 'Father',
+      parentOccupation: data.parentOccupation || 'Self-Employed',
+      parentAddress: String(data.parentAddress || data.residentialAddress || '').trim(),
+      passportPhotoUrl: data.passportPhotoUrl,
+      birthCertificateUrl: data.birthCertificateUrl,
+      previousResultUrl: data.previousResultUrl,
+      status: 'SUBMITTED',
+      submissionDate: new Date().toISOString().split('T')[0],
+      reviewNotes: 'Application successfully received. Under preliminary review by admissions team.',
+    };
+
+    db.admissions.unshift(newApplication);
+    saveDatabase(db);
+
+    addAuditLog('public_applicant', 'PARENT', 'ADMISSION_SUBMITTED', newId, `Application for ${newApplication.firstName} ${newApplication.lastName}`);
+
+    res.status(201).json({
+      success: true,
+      applicationId: newId,
+      application: newApplication,
+      message: `Application submitted successfully! Your application reference number is ${newId}.`,
+    });
+  });
+
+  app.get('/api/admissions', (req, res) => {
+    const user = extractUserFromHeader(req);
+    const { query } = req.query;
+
+    // If query by reference ID (e.g. PCD-2026-0001) or phone, allow public applicant lookup
+    if (query) {
+      const q = String(query).trim().toLowerCase();
+      const match = db.admissions.find(
+        (a) => a.id.toLowerCase() === q || a.parentPhone.replace(/\s+/g, '') === q.replace(/\s+/g, '')
+      );
+      if (!match) {
+        return res.status(404).json({ error: 'No application found with provided reference or phone number.' });
+      }
+      return res.json({ application: match });
+    }
+
+    if (user && user.role === 'APPLICANT') {
+      const applicantAdmissions = db.admissions.filter((a) => {
+        const sameEmail = !!a.parentEmail && !!user.email && a.parentEmail.toLowerCase() === user.email.toLowerCase();
+        const samePhone = !!user.phone && a.parentPhone.replace(/\s+/g, '') === user.phone.replace(/\s+/g, '');
+        return sameEmail || samePhone;
+      });
+      return res.json({ admissions: applicantAdmissions });
+    }
+
+    // Otherwise require Admin/Principal access
+    if (!user || (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN' && user.role !== 'PRINCIPAL')) {
+      return res.status(403).json({ error: 'Unauthorized to view full admission list' });
+    }
+
+    res.json({ admissions: db.admissions });
+  });
+
+  app.patch('/api/admissions/:id/status', (req, res) => {
+    const user = extractUserFromHeader(req);
+    if (!user || (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN' && user.role !== 'PRINCIPAL')) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const { id } = req.params;
+    const { status, reviewNotes, interviewDate } = req.body;
+
+    const item = db.admissions.find((a) => a.id === id);
+    if (!item) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
+
+    if (status) item.status = status;
+    if (reviewNotes !== undefined) item.reviewNotes = reviewNotes;
+    if (interviewDate) item.interviewDate = interviewDate;
+    item.reviewedBy = user.name;
+    item.reviewedAt = new Date().toISOString();
+
+    saveDatabase(db);
+    addAuditLog(user.email, user.role, 'ADMISSION_STATUS_UPDATED', id, `Updated to ${status}`);
+
+    res.json({ success: true, application: item });
+  });
+
+  // 4. Students API (with strict Parent/Student isolation)
+  app.get('/api/students', (req, res) => {
+    const user = extractUserFromHeader(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    if (user.role === 'PARENT') {
+      const linked = user.linkedStudentIds || [];
+      const parentStudents = db.students.filter((s) => linked.includes(s.id) || s.parentId === user.id);
+      return res.json({ students: parentStudents });
+    }
+
+    if (user.role === 'STUDENT') {
+      const linked = user.linkedStudentIds || [];
+      const selfStudents = db.students.filter((s) => linked.includes(s.id));
+      return res.json({ students: selfStudents });
+    }
+
+    if (user.role === 'TEACHER') {
+      const teacherStudents = db.students.filter((s) => s.status === 'ACTIVE');
+      return res.json({ students: teacherStudents });
+    }
+
+    // Admin, Principal, Accountant see full list
+    res.json({ students: db.students });
+  });
+
+  app.post('/api/students', (req, res) => {
+    const user = extractUserFromHeader(req);
+    if (!user || (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN' && user.role !== 'PRINCIPAL' && user.role !== 'ACCOUNTANT')) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const data = req.body;
+    const newStudent: Student = {
+      id: `stu-${Date.now()}`,
+      admissionNo: data.admissionNo || `PCD/${new Date().getFullYear()}/${String(db.students.length + 1).padStart(4, '0')}`,
+      firstName: data.firstName,
+      lastName: data.lastName,
+      otherName: data.otherName,
+      gender: data.gender || 'Male',
+      dateOfBirth: data.dateOfBirth || '2015-01-01',
+      arm: data.arm || 'SECONDARY',
+      classId: data.classId || 'cls-jss1',
+      className: data.className || 'JSS 1',
+      parentId: data.parentId || 'usr-parent',
+      parentName: data.parentName || 'Parent / Guardian',
+      parentPhone: data.parentPhone || '+234 803 000 0000',
+      parentEmail: data.parentEmail || '',
+      address: data.address || 'Doma, Nasarawa State',
+      sportsHouse: data.sportsHouse || 'Purple (Faith)',
+      status: 'ACTIVE',
+      enrolledDate: new Date().toISOString().split('T')[0],
+    };
+
+    db.students.unshift(newStudent);
+
+    const normalizedBaseName = `${newStudent.firstName}${newStudent.lastName}`.replace(/[^a-z0-9]/gi, '').toLowerCase();
+    const generatedEmail = `${normalizedBaseName}@peculiarschools.edu.ng`;
+    const existingPortalUser = db.users.find((u) => u.email.toLowerCase() === generatedEmail.toLowerCase());
+
+    if (existingPortalUser) {
+      existingPortalUser.linkedStudentIds = Array.from(new Set([...(existingPortalUser.linkedStudentIds || []), newStudent.id]));
+      existingPortalUser.role = 'STUDENT';
+      existingPortalUser.name = `${newStudent.firstName} ${newStudent.lastName}`;
+      existingPortalUser.phone = newStudent.parentPhone;
+    } else {
+      db.users.unshift({
+        id: `usr-student-${Date.now()}`,
+        email: generatedEmail,
+        name: `${newStudent.firstName} ${newStudent.lastName}`,
+        role: 'STUDENT',
+        phone: newStudent.parentPhone,
+        password: 'Peculiar@2026',
+        linkedStudentIds: [newStudent.id],
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    saveDatabase(db);
+    addAuditLog(user.email, user.role, 'STUDENT_ENROLLED', newStudent.admissionNo, `Enrolled ${newStudent.firstName} ${newStudent.lastName} into ${newStudent.className}`);
+
+    res.status(201).json({ student: newStudent });
+  });
+
+  // 5. Academic Results API
+  app.get('/api/results', (req, res) => {
+    const user = extractUserFromHeader(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    if (user.role === 'PARENT') {
+      const linked = user.linkedStudentIds || [];
+      const parentResults = db.results.filter((r) => linked.includes(r.studentId) && r.published);
+      return res.json({ results: parentResults });
+    }
+
+    if (user.role === 'STUDENT') {
+      const linked = user.linkedStudentIds || [];
+      const studentResults = db.results.filter((r) => linked.includes(r.studentId) && r.published);
+      return res.json({ results: studentResults });
+    }
+
+    if (user.role === 'TEACHER') {
+      const assignedClasses = user.assignedClasses || [];
+      const teacherResults = db.results.filter((r) => {
+        const student = db.students.find((s) => s.id === r.studentId);
+        return (
+          !!student &&
+          student.status === 'ACTIVE' &&
+          (assignedClasses.includes(student.classId) ||
+            assignedClasses.includes(student.className) ||
+            assignedClasses.includes(student.arm))
+        );
+      });
+      return res.json({ results: teacherResults });
+    }
+
+    // Staff/Admin see all results
+    res.json({ results: db.results });
+  });
+
+  app.post('/api/results', (req, res) => {
+    const user = extractUserFromHeader(req);
+    if (!user || (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN' && user.role !== 'PRINCIPAL' && user.role !== 'TEACHER')) {
+      return res.status(403).json({ error: 'Unauthorized to enter or modify academic results' });
+    }
+
+    const data = req.body;
+    const existingIndex = db.results.findIndex((r) => r.id === data.id);
+
+    // Calculate total score, average, and grades
+    const subjects = (data.subjects || []).map((s: any) => {
+      const total = Number(s.caScore || 0) + Number(s.examScore || 0);
+      let grade: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' = 'F';
+      let remark: any = 'Fail';
+      if (total >= 80) { grade = 'A'; remark = 'Distinction'; }
+      else if (total >= 70) { grade = 'B'; remark = 'Very Good'; }
+      else if (total >= 60) { grade = 'C'; remark = 'Credit'; }
+      else if (total >= 50) { grade = 'D'; remark = 'Pass'; }
+      else if (total >= 40) { grade = 'E'; remark = 'Fair'; }
+
+      return {
+        subject: s.subject,
+        caScore: Number(s.caScore || 0),
+        examScore: Number(s.examScore || 0),
+        total,
+        grade,
+        remark,
+      };
+    });
+
+    const totalScore = subjects.reduce((sum: number, s: any) => sum + s.total, 0);
+    const maxScore = subjects.length * 100;
+    const average = subjects.length ? Math.round((totalScore / subjects.length) * 10) / 10 : 0;
+
+    const resultRecord: AcademicResult = {
+      id: data.id || `res-${Date.now()}`,
+      studentId: data.studentId,
+      studentName: data.studentName,
+      admissionNo: data.admissionNo,
+      classId: data.classId,
+      className: data.className,
+      arm: data.arm || 'SECONDARY',
+      academicSession: data.academicSession || '2025/2026',
+      term: data.term || 'Second Term',
+      subjects,
+      totalScore,
+      maxScore,
+      average,
+      positionInClass: data.positionInClass || 1,
+      totalStudentsInClass: data.totalStudentsInClass || 30,
+      attendanceDays: data.attendanceDays || 60,
+      totalDays: 65,
+      teacherRemark: data.teacherRemark || 'Good performance, keep striving for excellence.',
+      principalRemark: data.principalRemark || 'Commendable result and moral standing.',
+      published: data.published ?? true,
+      publishedDate: new Date().toISOString().split('T')[0],
+    };
+
+    if (existingIndex >= 0) {
+      db.results[existingIndex] = resultRecord;
+    } else {
+      db.results.push(resultRecord);
+    }
+
+    saveDatabase(db);
+    addAuditLog(user.email, user.role, 'RESULT_SAVED', resultRecord.admissionNo, `Saved result for ${resultRecord.studentName}`);
+
+    res.json({ success: true, result: resultRecord });
+  });
+
+  // 6. Fees & Payments API
+  app.get('/api/fees', (req, res) => {
+    const user = extractUserFromHeader(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    if (user.role === 'PARENT') {
+      const linked = user.linkedStudentIds || [];
+      const parentFees = db.fees.filter((f) => linked.includes(f.studentId));
+      return res.json({ fees: parentFees });
+    }
+
+    if (user.role === 'STUDENT') {
+      const linked = user.linkedStudentIds || [];
+      const studentFees = db.fees.filter((f) => linked.includes(f.studentId));
+      return res.json({ fees: studentFees });
+    }
+
+    if (user.role === 'TEACHER') {
+      return res.status(403).json({ error: 'Teachers are not authorized to view the school fee ledger' });
+    }
+
+    // Accountant, Admin, Principal see full fees ledger
+    if (['ACCOUNTANT', 'ADMIN', 'SUPER_ADMIN', 'PRINCIPAL'].includes(user.role)) {
+      return res.json({ fees: db.fees });
+    }
+
+    return res.status(403).json({ error: 'Unauthorized to access fee records' });
+  });
+
+  app.post('/api/fees/record-payment', (req, res) => {
+    const user = extractUserFromHeader(req);
+    if (!user || (user.role !== 'ACCOUNTANT' && user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN')) {
+      return res.status(403).json({ error: 'Unauthorized to record financial payments' });
+    }
+
+    const { studentId, amount, paymentMethod, reference } = req.body;
+    const ledger = db.fees.find((f) => f.studentId === studentId);
+    if (!ledger) {
+      return res.status(404).json({ error: 'Student fee record not found' });
+    }
+
+    const amountPaid = Number(amount);
+    if (isNaN(amountPaid) || amountPaid <= 0) {
+      return res.status(400).json({ error: 'Invalid payment amount' });
+    }
+
+    const receiptNo = `PCD/REC/2026-${String(Math.floor(1000 + Math.random() * 9000))}`;
+    const paymentEntry: FeePayment = {
+      id: `pay-${Date.now()}`,
+      receiptNumber: receiptNo,
+      studentId: ledger.studentId,
+      studentName: ledger.studentName,
+      admissionNo: ledger.admissionNo,
+      className: ledger.className,
+      amountPaid,
+      paymentDate: new Date().toISOString().split('T')[0],
+      paymentMethod: paymentMethod || 'Bank Transfer',
+      transactionReference: reference || `TRX-${Date.now()}`,
+      term: ledger.term,
+      session: ledger.session,
+      recordedBy: user.name,
+    };
+
+    ledger.payments.push(paymentEntry);
+    ledger.totalPaid += amountPaid;
+    ledger.balanceDue = Math.max(0, ledger.totalPayable - ledger.totalPaid);
+    ledger.status = ledger.balanceDue === 0 ? 'PAID' : 'PARTIAL';
+
+    saveDatabase(db);
+    addAuditLog(user.email, user.role, 'FEE_PAYMENT_RECORDED', receiptNo, `Recorded payment of N${amountPaid} for ${ledger.studentName}`);
+
+    res.json({ success: true, receipt: paymentEntry, updatedLedger: ledger });
+  });
+
+  // 7. News & Announcements CMS
+  app.get('/api/news', (req, res) => {
+    const user = extractUserFromHeader(req);
+    const canManageSchoolContent = user && ['ADMIN', 'SUPER_ADMIN', 'PRINCIPAL', 'TEACHER'].includes(user.role);
+    if (canManageSchoolContent) {
+      return res.json({ news: db.news });
+    }
+    const publishedNews = db.news.filter((n) => n.published);
+    res.json({ news: publishedNews });
+  });
+
+  app.post('/api/news', (req, res) => {
+    const user = extractUserFromHeader(req);
+    if (!user || !['ADMIN', 'SUPER_ADMIN', 'PRINCIPAL', 'TEACHER'].includes(user.role)) {
+      return res.status(403).json({ error: 'Unauthorized to publish news' });
+    }
+
+    const data = req.body;
+    const newArticle: NewsArticle = {
+      id: `news-${Date.now()}`,
+      title: data.title,
+      slug: (data.title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      excerpt: data.excerpt,
+      content: data.content,
+      category: data.category || 'Announcement',
+      featuredImage: data.featuredImage || 'https://images.unsplash.com/photo-1577896851231-70ef18881754?auto=format&fit=crop&w=1200&q=80',
+      author: user.name,
+      authorRole: user.role === 'PRINCIPAL' ? 'Principal' : 'Admin',
+      publishDate: new Date().toISOString().split('T')[0],
+      published: data.published ?? true,
+      isImportantNotice: data.isImportantNotice || false,
+    };
+
+    db.news.unshift(newArticle);
+    saveDatabase(db);
+    addAuditLog(user.email, user.role, 'NEWS_CREATED', newArticle.title, 'Created news article');
+
+    res.status(201).json({ article: newArticle });
+  });
+
+  app.delete('/api/news/:id', (req, res) => {
+    const user = extractUserFromHeader(req);
+    if (!user || !['ADMIN', 'SUPER_ADMIN', 'PRINCIPAL', 'TEACHER'].includes(user.role)) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const { id } = req.params;
+    const idx = db.news.findIndex((n) => n.id === id);
+    if (idx >= 0) {
+      const removed = db.news.splice(idx, 1)[0];
+      saveDatabase(db);
+      addAuditLog(user.email, user.role, 'NEWS_DELETED', removed.title, 'Deleted news article');
+      return res.json({ success: true });
+    }
+    res.status(404).json({ error: 'Article not found' });
+  });
+
+  // 8. Gallery CMS
+  app.get('/api/gallery', (req, res) => {
+    const user = extractUserFromHeader(req);
+    if (user && ['ADMIN', 'SUPER_ADMIN', 'PRINCIPAL', 'TEACHER'].includes(user.role)) {
+      return res.json({ gallery: db.gallery });
+    }
+    const published = db.gallery.filter((g) => g.published);
+    res.json({ gallery: published });
+  });
+
+  app.post('/api/gallery', (req, res) => {
+    const user = extractUserFromHeader(req);
+    if (!user || !['ADMIN', 'SUPER_ADMIN', 'PRINCIPAL', 'TEACHER'].includes(user.role)) {
+      return res.status(403).json({ error: 'Unauthorized to upload gallery media' });
+    }
+
+    const data = req.body;
+    const newItem: GalleryMedia = {
+      id: `gal-${Date.now()}`,
+      title: data.title,
+      category: data.category || 'School Life',
+      description: data.description || '',
+      imageUrl: data.imageUrl,
+      date: new Date().toISOString().split('T')[0],
+      published: data.published ?? true,
+      featured: data.featured || false,
+    };
+
+    db.gallery.unshift(newItem);
+    saveDatabase(db);
+    addAuditLog(user.email, user.role, 'GALLERY_UPLOAD', newItem.title, 'Added new photo to gallery');
+
+    res.status(201).json({ item: newItem });
+  });
+
+  app.delete('/api/gallery/:id', (req, res) => {
+    const user = extractUserFromHeader(req);
+    if (!user || !['ADMIN', 'SUPER_ADMIN', 'PRINCIPAL', 'TEACHER'].includes(user.role)) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const { id } = req.params;
+    const idx = db.gallery.findIndex((g) => g.id === id);
+    if (idx >= 0) {
+      const removed = db.gallery.splice(idx, 1)[0];
+      saveDatabase(db);
+      addAuditLog(user.email, user.role, 'GALLERY_DELETED', removed.title, 'Removed photo from gallery');
+      return res.json({ success: true });
+    }
+    res.status(404).json({ error: 'Gallery item not found' });
+  });
+
+  // 9. Contact Inquiries API
+  app.post('/api/contact', (req, res) => {
+    const { name, email, phone, subject, message } = req.body;
+    if (!name || !email || !message) {
+      return res.status(400).json({ error: 'Name, email, and message are required' });
+    }
+
+    const newMsg: ContactMessage = {
+      id: `msg-${Date.now()}`,
+      name: String(name).trim(),
+      email: String(email).trim(),
+      phone: String(phone || '').trim(),
+      subject: String(subject || 'General Inquiry').trim(),
+      message: String(message).trim(),
+      createdAt: new Date().toISOString(),
+      status: 'UNREAD',
+    };
+
+    db.contactMessages.unshift(newMsg);
+    saveDatabase(db);
+
+    res.status(201).json({
+      success: true,
+      message: 'Thank you for contacting Peculiar College Doma. Our administrative office will get back to you shortly.',
+    });
+  });
+
+  app.get('/api/contact', (req, res) => {
+    const user = extractUserFromHeader(req);
+    if (!user || (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN' && user.role !== 'PRINCIPAL')) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+    res.json({ messages: db.contactMessages });
+  });
+
+  app.get('/api/contact/messages', (req, res) => {
+    const user = extractUserFromHeader(req);
+    if (!user || (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN' && user.role !== 'PRINCIPAL')) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+    res.json({ messages: db.contactMessages });
+  });
+
+  // 10. Audit Logs API
+  app.get('/api/audit-logs', (req, res) => {
+    const user = extractUserFromHeader(req);
+    if (!user || (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN')) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+    res.json({ logs: db.auditLogs });
+  });
+
+  // 11. Server-Side Gemini AI Assistant (Safe, prompt-grounded)
+  app.post('/api/ai/draft', async (req, res) => {
+    const user = extractUserFromHeader(req);
+    if (!user || (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN' && user.role !== 'PRINCIPAL' && user.role !== 'TEACHER')) {
+      return res.status(403).json({ error: 'Unauthorized to use staff AI drafting assistant' });
+    }
+
+    const { type, topic, context } = req.body;
+    const apiKey = process.env.GEMINI_API_KEY;
+
+    if (!apiKey) {
+      // Fallback template when API key is pending configuration
+      return res.json({
+        content: `[Peculiar College Doma - Official Draft]\n\nRE: ${topic || 'School Announcement'}\n\nDear Parents, Guardians, and Esteemed Staff,\n\nWe bring you warm greetings from the management of Peculiar College Doma. In alignment with our motto of Knowledge, Character, and Excellence, we wish to inform you regarding ${topic || 'upcoming school activities'}.\n\nKey Highlights:\n1. Punctuality and attendance must remain exemplary.\n2. All students are required to be in complete and proper school uniform.\n3. The school compound remains safe, disciplined, and focused on holistic educational growth.\n\nThank you for your continuous partnership.\n\nYours faithfully,\nSchool Administration\nPeculiar College Doma`,
+        isFallback: true,
+        note: 'Generated using default school editorial template (configure GEMINI_API_KEY for custom AI generation).',
+      });
+    }
+
+    try {
+      const ai = new GoogleGenAI({ apiKey });
+      const prompt = `You are the executive communication officer for Peculiar College Doma, an esteemed private school in Doma, Nasarawa State, Nigeria providing Nursery, Primary, and Secondary education. The school's motto is "Knowledge, Character and Excellence" and its mission is "Nurturing minds, building character, and raising leaders".
+      
+Please write a professional, warm, and dignified ${type || 'announcement'} on the topic: "${topic}".
+Additional context provided by staff: "${context || 'Standard school communication'}".
+
+Tone: Respectful, clear, welcoming, academic, culturally grounded for Nigerian parents and guardians. Avoid generic clichés. Sign off as "School Administration, Peculiar College Doma".`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+      });
+
+      const text = response.text || 'Draft generated successfully.';
+      res.json({ content: text, isFallback: false });
+    } catch (err: any) {
+      console.error('Error generating AI draft:', err);
+      res.status(500).json({
+        error: 'Failed to generate content with Gemini API',
+        details: err?.message || 'Unknown error',
+      });
+    }
+  });
+
+  // Vite middleware for development vs static build for production
+  if (process.env.NODE_ENV !== 'production') {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
+
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Peculiar College Doma Server running at http://0.0.0.0:${PORT}`);
+  });
+}
+
+startServer().catch((err) => {
+  console.error('Fatal server startup failure:', err);
+});

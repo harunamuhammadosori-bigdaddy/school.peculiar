@@ -461,16 +461,16 @@ export const AdmissionsView: React.FC<AdmissionsViewProps> = ({ onNavigate, onAd
     }
   };
 
-  const handleTrackSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!trackQuery.trim()) return;
+  const searchAdmission = async (queryToSearch: string) => {
+    const trimmed = queryToSearch.trim();
+    if (!trimmed) return;
 
     setTrackError(null);
     setTrackedApp(null);
     setTrackingLoading(true);
 
     try {
-      const res = await fetch(`/api/admissions?query=${encodeURIComponent(trackQuery.trim())}`);
+      const res = await fetch(`/api/admissions?query=${encodeURIComponent(trimmed)}`);
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || 'No matching application found');
@@ -481,6 +481,11 @@ export const AdmissionsView: React.FC<AdmissionsViewProps> = ({ onNavigate, onAd
     } finally {
       setTrackingLoading(false);
     }
+  };
+
+  const handleTrackSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await searchAdmission(trackQuery);
   };
 
   return (
@@ -1006,6 +1011,37 @@ export const AdmissionsView: React.FC<AdmissionsViewProps> = ({ onNavigate, onAd
               <p className="text-xs sm:text-sm text-slate-600 mt-1">
                 Enter your application reference number (e.g. <code className="text-emerald-700 font-bold">PCD-2026-0001</code>) or parent's phone number.
               </p>
+              <div className="flex flex-wrap justify-center items-center gap-1.5 mt-2.5 text-xs text-slate-500">
+                <span className="font-medium">Quick examples:</span>
+                {['PCD-2026-0001', 'PCD-2026-0002', 'PCD-2026-0003'].map((sampleId) => (
+                  <button
+                    key={sampleId}
+                    type="button"
+                    onClick={() => {
+                      setTrackQuery(sampleId);
+                      searchAdmission(sampleId);
+                    }}
+                    className="font-mono text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded text-[11px] font-semibold transition cursor-pointer"
+                  >
+                    {sampleId}
+                  </button>
+                ))}
+              </div>
+              {submittedApp && (
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTrackQuery(submittedApp.id);
+                      searchAdmission(submittedApp.id);
+                    }}
+                    className="text-xs bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-semibold px-3 py-1 rounded-full transition inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  >
+                    <span>Track your recent application ({submittedApp.id})</span>
+                    <ArrowRight className="w-3 h-3 text-amber-700" />
+                  </button>
+                </div>
+              )}
             </div>
 
             <form onSubmit={handleTrackSubmit} className="flex gap-2 max-w-md mx-auto mb-8">

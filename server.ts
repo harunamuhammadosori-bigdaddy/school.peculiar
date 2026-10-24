@@ -5,6 +5,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
+import mongoose from 'mongoose';
 import {
   INITIAL_USERS,
   INITIAL_STUDENTS,
@@ -179,12 +180,30 @@ async function startServer() {
     next();
   });
 
+  // Connect to MongoDB if MONGODB_URI is configured
+  if (process.env.MONGODB_URI) {
+    mongoose.set('bufferCommands', false);
+    mongoose
+      .connect(process.env.MONGODB_URI, {
+        serverSelectionTimeoutMS: 5000,
+      })
+      .then(() => {
+        console.log('[MongoDB] Connected successfully to MongoDB Atlas cluster');
+      })
+      .catch((err) => {
+        console.warn('[MongoDB] MongoDB Atlas connection pending IP whitelist or offline:', err.message);
+      });
+  }
+
   // 1. Health check
   app.get('/api/health', (req, res) => {
+    const mongoReady = mongoose.connection.readyState;
+    const mongoStatus = mongoReady === 1 ? 'connected' : mongoReady === 2 ? 'connecting' : 'disconnected';
     res.json({
       status: 'ok',
       school: 'Peculiar College Doma',
       academicSession: '2026/2027',
+      mongodb: mongoStatus,
       timestamp: new Date().toISOString(),
     });
   });
@@ -275,8 +294,8 @@ async function startServer() {
       return res.status(409).json({ error: 'An account already uses this email' });
     }
 
-    const linkedStudentIds = Array.isArray(data.linkedStudentIds)
-      ? Array.from(new Set(data.linkedStudentIds.filter((id: unknown): id is string => typeof id === 'string')))
+    const linkedStudentIds: string[] = Array.isArray(data.linkedStudentIds)
+      ? Array.from<string>(new Set(data.linkedStudentIds.filter((id: unknown): id is string => typeof id === 'string')))
       : [];
     if (linkedStudentIds.length > 50 || linkedStudentIds.some((id: string) => !db.students.some((student) => student.id === id))) {
       return res.status(400).json({ error: 'One or more linked students are invalid' });
@@ -285,8 +304,8 @@ async function startServer() {
       return res.status(400).json({ error: 'A student account must be linked to exactly one student record' });
     }
 
-    const assignedClasses = Array.isArray(data.assignedClasses)
-      ? Array.from(new Set(data.assignedClasses.filter((id: unknown): id is string => typeof id === 'string')))
+    const assignedClasses: string[] = Array.isArray(data.assignedClasses)
+      ? Array.from<string>(new Set(data.assignedClasses.filter((id: unknown): id is string => typeof id === 'string')))
       : [];
     if (data.role === 'TEACHER' && assignedClasses.some((id: string) => !INITIAL_CLASSES.some((schoolClass) => schoolClass.id === id))) {
       return res.status(400).json({ error: 'One or more assigned classes are invalid' });
@@ -384,6 +403,30 @@ async function startServer() {
   });
 
   app.get('/api/admissions', (req, res) => {
+    // 1. Public tracking query lookup (by application reference PCD-2026-XXXX, parent phone, or email)
+    const rawQuery = typeof req.query?.query === 'string' ? req.query.query.trim() : '';
+    if (rawQuery) {
+      const normalizedQuery = rawQuery.toLowerCase();
+      const normalizedPhone = rawQuery.replace(/\D/g, '');
+
+      const matched = db.admissions.find((app) => {
+        if (app.id.toLowerCase() === normalizedQuery) return true;
+        if (normalizedPhone && normalizedPhone.length >= 7) {
+          const appPhone = (app.parentPhone || '').replace(/\D/g, '');
+          if (appPhone.includes(normalizedPhone) || normalizedPhone.includes(appPhone)) return true;
+        }
+        if (app.parentEmail && app.parentEmail.toLowerCase() === normalizedQuery) return true;
+        return false;
+      });
+
+      if (!matched) {
+        return res.status(404).json({ error: 'No application found with the provided reference number or phone number.' });
+      }
+
+      return res.json({ success: true, application: matched });
+    }
+
+    // 2. Authenticated administrative or applicant listing
     const user = requireRole(req, res, ['SUPER_ADMIN', 'ADMIN', 'PRINCIPAL', 'APPLICANT']);
     if (!user) return;
 
@@ -397,6 +440,31 @@ async function startServer() {
     }
 
     res.json({ admissions: db.admissions });
+  });
+
+  app.get('/api/admissions/status', (req, res) => {
+    const rawQuery = typeof req.query?.query === 'string' ? req.query.query.trim() : '';
+    if (!rawQuery) {
+      return res.status(400).json({ error: 'Please enter your application reference number or phone number.' });
+    }
+    const normalizedQuery = rawQuery.toLowerCase();
+    const normalizedPhone = rawQuery.replace(/\D/g, '');
+
+    const matched = db.admissions.find((app) => {
+      if (app.id.toLowerCase() === normalizedQuery) return true;
+      if (normalizedPhone && normalizedPhone.length >= 7) {
+        const appPhone = (app.parentPhone || '').replace(/\D/g, '');
+        if (appPhone.includes(normalizedPhone) || normalizedPhone.includes(appPhone)) return true;
+      }
+      if (app.parentEmail && app.parentEmail.toLowerCase() === normalizedQuery) return true;
+      return false;
+    });
+
+    if (!matched) {
+      return res.status(404).json({ error: 'No application found with the provided reference number or phone number.' });
+    }
+
+    return res.json({ success: true, application: matched });
   });
 
   app.patch('/api/admissions/:id/status', (req, res) => {

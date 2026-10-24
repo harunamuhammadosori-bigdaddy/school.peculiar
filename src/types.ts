@@ -157,7 +157,7 @@ export interface FeePayment {
   className: string;
   amountPaid: number;
   paymentDate: string;
-  paymentMethod: 'Bank Transfer' | 'Cash (Bursary)' | 'POS' | 'Paystack / Online';
+  paymentMethod: 'Bank Transfer' | 'Cash (Bursary)' | 'POS' | 'Online Transfer';
   transactionReference: string;
   term: string;
   session: string;

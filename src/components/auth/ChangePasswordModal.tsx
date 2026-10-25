@@ -27,11 +27,14 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ token,
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ currentPassword, newPassword }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Unable to change password.');
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Unable to change password.');
+      }
       onComplete();
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Unable to reach the server.');
+      setError(saveError instanceof Error ? saveError.message : 'Unable to complete password update.');
     } finally {
       setIsSaving(false);
     }

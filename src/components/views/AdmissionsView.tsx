@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { AdmissionApplication } from '../../types';
 import { SchoolLogo } from '../SchoolLogo';
+import { ApiClient } from '../../services/apiClient';
 
 interface AdmissionsViewProps {
   onNavigate: (view: string) => void;
@@ -435,19 +436,10 @@ export const AdmissionsView: React.FC<AdmissionsViewProps> = ({ onNavigate, onAd
     setSubmitting(true);
 
     try {
-      const res = await fetch('/api/admissions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          passportPhotoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
-        }),
+      const data = await ApiClient.submitAdmission({
+        ...formData,
+        passportPhotoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
       });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to submit application');
-      }
 
       setSubmittedApp(data.application);
       if (typeof window !== 'undefined') {
@@ -470,12 +462,8 @@ export const AdmissionsView: React.FC<AdmissionsViewProps> = ({ onNavigate, onAd
     setTrackingLoading(true);
 
     try {
-      const res = await fetch(`/api/admissions?query=${encodeURIComponent(trimmed)}`);
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'No matching application found');
-      }
-      setTrackedApp(data.application);
+      const application = await ApiClient.trackAdmission(trimmed);
+      setTrackedApp(application);
     } catch (err: any) {
       setTrackError(err.message || 'Application not found with provided reference or phone number');
     } finally {

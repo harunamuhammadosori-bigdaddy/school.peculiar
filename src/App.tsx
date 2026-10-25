@@ -21,6 +21,7 @@ import {
   INITIAL_AUDIT_LOGS,
 } from './data/mockData';
 import { INITIAL_GALLERY_MEDIA } from './data/mediaData';
+import { ApiClient } from './services/apiClient';
 
 // Layout Components
 import { Navbar } from './components/Navbar';
@@ -62,12 +63,12 @@ export default function App() {
   const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false);
 
   // Application Data States
-  const [students, setStudents] = useState<Student[]>(INITIAL_STUDENTS);
-  const [admissions, setAdmissions] = useState<AdmissionApplication[]>(INITIAL_ADMISSIONS);
-  const [results, setResults] = useState<AcademicResult[]>(INITIAL_RESULTS);
-  const [fees, setFees] = useState<FeeLedger[]>(INITIAL_FEES);
-  const [news, setNews] = useState<NewsArticle[]>(INITIAL_NEWS);
-  const [gallery, setGallery] = useState<GalleryMedia[]>(INITIAL_GALLERY_MEDIA);
+  const [students, setStudents] = useState<Student[]>(() => ApiClient.getStudents());
+  const [admissions, setAdmissions] = useState<AdmissionApplication[]>(() => ApiClient.getAdmissions());
+  const [results, setResults] = useState<AcademicResult[]>(() => ApiClient.getResults());
+  const [fees, setFees] = useState<FeeLedger[]>(() => ApiClient.getFees());
+  const [news, setNews] = useState<NewsArticle[]>(() => ApiClient.getNews());
+  const [gallery, setGallery] = useState<GalleryMedia[]>(() => ApiClient.getGallery());
   const [contactMessages, setContactMessages] = useState<ContactMessage[]>(INITIAL_CONTACT_MESSAGES);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT_LOGS);
 
@@ -108,15 +109,23 @@ export default function App() {
   // Fetch dynamic data from API
   const refreshAllData = async () => {
     try {
+      // Sync from local cache first
+      setAdmissions(ApiClient.getAdmissions());
+      setStudents(ApiClient.getStudents());
+      setResults(ApiClient.getResults());
+      setFees(ApiClient.getFees());
+      setNews(ApiClient.getNews());
+      setGallery(ApiClient.getGallery());
+
       // News
       fetch('/api/news')
-        .then((res) => (res.ok ? res.json() : null))
+        .then((res) => (res.ok && res.headers.get('content-type')?.includes('application/json') ? res.json() : null))
         .then((data) => data && setNews(data.news || (Array.isArray(data) ? data : [])))
         .catch(() => {});
 
       // Gallery
       fetch('/api/gallery')
-        .then((res) => (res.ok ? res.json() : null))
+        .then((res) => (res.ok && res.headers.get('content-type')?.includes('application/json') ? res.json() : null))
         .then((data) => data && setGallery(data.gallery || (Array.isArray(data) ? data : [])))
         .catch(() => {});
 
@@ -129,14 +138,14 @@ export default function App() {
         // Admissions
         if (isAdminPrivilegedRole || currentUser?.role === 'APPLICANT') {
           fetch('/api/admissions', { headers: authHeaders })
-            .then((res) => (res.ok ? res.json() : null))
+            .then((res) => (res.ok && res.headers.get('content-type')?.includes('application/json') ? res.json() : null))
             .then((data) => data && setAdmissions(data.admissions || []))
             .catch(() => {});
         }
 
         // Students
         fetch('/api/students', { headers: authHeaders })
-          .then((res) => (res.ok ? res.json() : null))
+          .then((res) => (res.ok && res.headers.get('content-type')?.includes('application/json') ? res.json() : null))
           .then((data) => data && setStudents(data.students || []))
           .catch(() => {});
 

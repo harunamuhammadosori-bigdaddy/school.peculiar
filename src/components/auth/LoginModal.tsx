@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { User, UserRole } from '../../types';
 import { SchoolLogo } from '../SchoolLogo';
 import { X, Lock, Mail, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
+import { ApiClient } from '../../services/apiClient';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -23,7 +24,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
     setError(null);
   };
 
-  const showDemoAccounts = import.meta.env.DEV;
+  const showDemoAccounts = true;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,16 +32,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
     setLoading(true);
 
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to login');
-      }
+      const data = await ApiClient.login(email, password);
 
       localStorage.setItem('pcd_token', data.token);
       localStorage.setItem('pcd_user', JSON.stringify(data.user));

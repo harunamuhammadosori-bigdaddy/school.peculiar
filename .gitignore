@@ -10,3 +10,6 @@ service-account.json
 .env
 .data-store.json
 .data-store.json.tmp
+bun.lock
+.aistudio/
+public/assets/aistudio/

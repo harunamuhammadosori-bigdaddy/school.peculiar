@@ -10,6 +10,7 @@ import {
   AlertCircle,
   Building,
 } from 'lucide-react';
+import { ApiClient } from '../../services/apiClient';
 
 export const ContactView: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -19,7 +20,6 @@ export const ContactView: React.FC = () => {
     subject: 'General Inquiry',
     message: '',
   });
-
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -31,16 +31,7 @@ export const ContactView: React.FC = () => {
     setSuccessMessage(null);
 
     try {
-      const res = await fetch('/api/contact', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to send message');
-      }
+      const data = await ApiClient.submitContact(formData);
 
       setSuccessMessage(data.message || 'Your inquiry has been sent to our administrative office.');
       setFormData({

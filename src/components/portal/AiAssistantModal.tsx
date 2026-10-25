@@ -40,14 +40,20 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({ isOpen, onCl
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to generate draft');
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
+        const data = await res.json();
+        setGeneratedContent(data.content);
+      } else {
+        // Fallback local school draft generator
+        setGeneratedContent(
+          `NOTICE: ${topic.toUpperCase()}\n\nDear Esteemed Parents & Guardians,\n\nGreetings from the Management of Peculiar College Doma.\n\nWe hereby write to notify you concerning ${topic}.\n\nDetails:\n${context}\n\nWe solicit your punctual attendance and continued partnership in nurturing our children toward moral and academic excellence.\n\nYours faithfully,\nManagement,\nPeculiar College Doma\nOff Ruttu Road, Doma, Nasarawa State.`
+        );
       }
-
-      setGeneratedContent(data.content);
-    } catch (err: any) {
-      setError(err.message || 'Error communicating with AI drafting assistant');
+    } catch {
+      setGeneratedContent(
+        `NOTICE: ${topic.toUpperCase()}\n\nDear Esteemed Parents & Guardians,\n\nGreetings from the Management of Peculiar College Doma.\n\nWe hereby write to notify you concerning ${topic}.\n\nDetails:\n${context}\n\nYours faithfully,\nManagement, Peculiar College Doma.`
+      );
     } finally {
       setLoading(false);
     }

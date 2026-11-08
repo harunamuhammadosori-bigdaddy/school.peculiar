@@ -10,6 +10,7 @@ import {
   Compass,
   ArrowRight,
   CheckCircle,
+  Building2,
 } from 'lucide-react';
 import { SchoolLogo } from '../SchoolLogo';
 
@@ -61,14 +62,14 @@ export const AboutView: React.FC<AboutViewProps> = ({ onNavigate }) => {
           <div className="lg:col-span-6">
             <div className="rounded-2xl overflow-hidden shadow-lg border border-slate-200 bg-slate-900">
               <img
-                src="https://images.unsplash.com/photo-1577896851231-70ef18881754?auto=format&fit=crop&w=1200&q=80"
-                alt="Students at Morning Assembly"
+                src="/school-media/front-view-gate.jpg"
+                alt="Peculiar College Doma Main Entrance & Gate"
                 className="w-full h-80 sm:h-96 object-cover"
               />
               <div className="p-4 bg-slate-900 text-white text-xs">
-                <span className="font-semibold text-amber-400">Daily Assembly at Peculiar College</span>
+                <span className="font-semibold text-amber-400">Peculiar College Doma Main Entrance & Gated Compound</span>
                 <p className="text-slate-400 mt-0.5">
-                  Building spiritual discipline, orderliness, and mutual respect among students every morning.
+                  A safe, secure, and peaceful learning sanctuary in Doma, Nasarawa State.
                 </p>
               </div>
             </div>
@@ -144,7 +145,155 @@ export const AboutView: React.FC<AboutViewProps> = ({ onNavigate }) => {
         </div>
       </section>
 
-      {/* 3. Principal's Message */}
+      {/* 3. Campus Infrastructure & Facilities */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center max-w-3xl mx-auto mb-12">
+          <span className="text-xs font-bold uppercase tracking-widest text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 inline-flex items-center gap-1.5">
+            <Building2 className="w-3.5 h-3.5" />
+            <span>Infrastructure & Learning Spaces</span>
+          </span>
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 mt-3 tracking-tight">
+            Our Purpose-Built Campus in Doma
+          </h2>
+          <p className="text-slate-600 text-sm sm:text-base mt-2">
+            Every building, laboratory, and compound space at Peculiar College has been intentionally designed to support academic excellence and spiritual calm.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Item 1: Admin & Office */}
+          <div className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-xs hover:shadow-md transition-all">
+            <div className="relative h-48 overflow-hidden bg-slate-900">
+              <img
+                src="/school-media/administrative-block-office.jpg"
+                alt="Administrative Office Block"
+                className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+              />
+              <span className="absolute top-3 left-3 bg-slate-950/80 text-amber-300 font-bold text-[10px] px-2.5 py-0.5 rounded backdrop-blur-xs">
+                Administration
+              </span>
+            </div>
+            <div className="p-5">
+              <h4 className="font-bold text-slate-900 text-base">Administrative & Principal Office Block</h4>
+              <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+                Centralized administration managing admissions, parent inquiries, academic records, and institutional leadership.
+              </p>
+            </div>
+          </div>
+
+          {/* Item 2: Senior Secondary Block */}
+          <div className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-xs hover:shadow-md transition-all">
+            <div className="relative h-48 overflow-hidden bg-slate-900">
+              <img
+                src="/school-media/senior-secondary-block.jpg"
+                alt="Senior Secondary Block"
+                className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+              />
+              <span className="absolute top-3 left-3 bg-slate-950/80 text-amber-300 font-bold text-[10px] px-2.5 py-0.5 rounded backdrop-blur-xs">
+                Academics
+              </span>
+            </div>
+            <div className="p-5">
+              <h4 className="font-bold text-slate-900 text-base">Senior Secondary Classroom Block</h4>
+              <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+                Dedicated learning wings for SSS 1 to SSS 3 featuring dual desks and disciplined study atmospheres.
+              </p>
+            </div>
+          </div>
+
+          {/* Item 3: Chemistry & Science Labs */}
+          <div className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-xs hover:shadow-md transition-all">
+            <div className="relative h-48 overflow-hidden bg-slate-900">
+              <img
+                src="/school-media/chemistry-lab-glassware.jpg"
+                alt="Chemistry Laboratory Equipment"
+                className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+              />
+              <span className="absolute top-3 left-3 bg-slate-950/80 text-amber-300 font-bold text-[10px] px-2.5 py-0.5 rounded backdrop-blur-xs">
+                Laboratories
+              </span>
+            </div>
+            <div className="p-5">
+              <h4 className="font-bold text-slate-900 text-base">Chemistry & Science Laboratories</h4>
+              <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+                Equipped with burettes, pipettes, test tubes, and certified chemicals for WAEC and NECO practicals.
+              </p>
+            </div>
+          </div>
+
+          {/* Item 4: Grand Examination Hall */}
+          <div className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-xs hover:shadow-md transition-all">
+            <div className="relative h-48 overflow-hidden bg-slate-900">
+              <img
+                src="/school-media/exam-hall-exterior.jpg"
+                alt="Examination Hall Exterior"
+                className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+              />
+              <span className="absolute top-3 left-3 bg-slate-950/80 text-amber-300 font-bold text-[10px] px-2.5 py-0.5 rounded backdrop-blur-xs">
+                Examination
+              </span>
+            </div>
+            <div className="p-5">
+              <h4 className="font-bold text-slate-900 text-base">Purpose-Built Examination Hall</h4>
+              <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+                Spacious multipurpose hall designed for external certifications, mock examinations, and school gatherings.
+              </p>
+            </div>
+          </div>
+
+          {/* Item 5: Solar Power Room */}
+          <div className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-xs hover:shadow-md transition-all">
+            <div className="relative h-48 overflow-hidden bg-slate-900">
+              <img
+                src="/school-media/solar-power-room.jpg"
+                alt="Solar Power Inverter Room"
+                className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+              />
+              <span className="absolute top-3 left-3 bg-slate-950/80 text-amber-300 font-bold text-[10px] px-2.5 py-0.5 rounded backdrop-blur-xs">
+                Green Power
+              </span>
+            </div>
+            <div className="p-5">
+              <h4 className="font-bold text-slate-900 text-base">24/7 Solar Inverter Power Plant</h4>
+              <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+                Clean and reliable energy plant powering computer workstations, laboratory devices, and classroom fans.
+              </p>
+            </div>
+          </div>
+
+          {/* Item 6: Teachers' Staff Room */}
+          <div className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-xs hover:shadow-md transition-all">
+            <div className="relative h-48 overflow-hidden bg-slate-900">
+              <img
+                src="/school-media/teachers-staff-room.jpg"
+                alt="Teachers Staff Room"
+                className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+              />
+              <span className="absolute top-3 left-3 bg-slate-950/80 text-amber-300 font-bold text-[10px] px-2.5 py-0.5 rounded backdrop-blur-xs">
+                Faculty
+              </span>
+            </div>
+            <div className="p-5">
+              <h4 className="font-bold text-slate-900 text-base">Educators' Staff Room & Lounge</h4>
+              <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+                Professional workspace where subject teachers collaborate, mark continuous assessments, and prepare lessons.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="text-center mt-10">
+          <button
+            onClick={() => onNavigate('gallery')}
+            className="px-6 py-3 rounded-xl bg-emerald-800 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm transition-all inline-flex items-center gap-2 shadow-sm"
+          >
+            <span>View All School Facilities in Gallery</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
+      </section>
+
+      {/* 4. Principal's Message */}
       <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="bg-white rounded-2xl p-8 sm:p-12 border border-slate-200 shadow-md">
           <div className="flex flex-col sm:flex-row items-center gap-8 mb-6">

@@ -17,18 +17,23 @@ export const GalleryView: React.FC<GalleryViewProps> = ({
 
   const categories = [
     'All',
-    'Morning Assembly',
-    'Sports & Inter-House',
-    'Exams & Revision',
-    'Awards & Staff',
-    'Nursery Life',
-    'Secondary Arm',
+    'Campus Tour',
+    'Classrooms',
+    'Science Labs',
+    'Facilities',
+    'Student Life',
+    'Sports',
   ];
 
   const filteredItems =
     selectedCategory === 'All'
       ? mediaItems
-      : mediaItems.filter((m) => m.category.toLowerCase().includes(selectedCategory.toLowerCase()) || selectedCategory.toLowerCase().includes(m.category.toLowerCase()));
+      : mediaItems.filter(
+          (m) =>
+            m.category.toLowerCase() === selectedCategory.toLowerCase() ||
+            m.category.toLowerCase().includes(selectedCategory.toLowerCase()) ||
+            selectedCategory.toLowerCase().includes(m.category.toLowerCase())
+        );
 
   const handleNext = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -53,13 +58,13 @@ export const GalleryView: React.FC<GalleryViewProps> = ({
         <div className="max-w-4xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-800/60 border border-emerald-500/30 text-amber-300 text-xs font-semibold uppercase tracking-wider mb-4">
             <Camera className="w-3.5 h-3.5" />
-            <span>Visual Archive of Peculiar College</span>
+            <span>Authentic Visual Tour of Peculiar College Doma</span>
           </div>
           <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight">
-            School Photo Gallery & Campus Life
+            School Photo Gallery & Campus Tour
           </h1>
           <p className="mt-4 text-base sm:text-lg text-slate-300 max-w-2xl mx-auto leading-relaxed">
-            Witness our orderly morning assemblies, vibrant volleyball tournaments, outdoor shade revision, and joyful prize celebrations.
+            Explore authentic photographs of our modern science laboratories, spacious examination halls, tree-lined compound, disciplined classrooms, and vibrant student community in Doma.
           </p>
         </div>
       </section>

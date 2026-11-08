@@ -34,6 +34,7 @@ import {
   Filter,
 } from 'lucide-react';
 import { ApiClient, parseResponseSafely } from '../../services/apiClient';
+import { DeviceImageUploader } from '../common/DeviceImageUploader';
 
 interface AdminDashboardProps {
   user: User;
@@ -141,13 +142,38 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [studentSearch, setStudentSearch] = useState('');
   const [classFilter, setClassFilter] = useState('ALL');
   const [sectionFilter, setSectionFilter] = useState('ALL');
-  const [studentStatusFilter, setStudentStatusFilter] = useState('ACTIVE');
+  const [studentStatusFilter, setStudentStatusFilter] = useState('ALL');
+  const [statusActionMessage, setStatusActionMessage] = useState<string | null>(null);
 
   // New Student Modal State
   const [showNewStudentModal, setShowNewStudentModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [studentPortalCredentials, setStudentPortalCredentials] = useState<{ email: string; password: string } | null>(null);
   const [studentFormError, setStudentFormError] = useState('');
+  const [updatingStudentId, setUpdatingStudentId] = useState<string | null>(null);
+  const canManageStudents = ['ADMIN', 'SUPER_ADMIN', 'PRINCIPAL'].includes(user.role);
+
+  const openEnrollStudentModal = () => {
+    setEditingStudent(null);
+    setStudentFormError('');
+    const nextNum = String(students.length + 1).padStart(4, '0');
+    const autoAdmissionNo = `PCD/${new Date().getFullYear()}/${nextNum}`;
+    setNewStudentData({
+      admissionNo: autoAdmissionNo,
+      firstName: '',
+      lastName: '',
+      classId: 'cls-jss1',
+      gender: 'Male',
+      dateOfBirth: '',
+      parentName: '',
+      parentPhone: '',
+      parentEmail: '',
+      address: '',
+      sportsHouse: 'Purple (Faith)',
+    });
+    setShowNewStudentModal(true);
+  };
+
   const [newStudentData, setNewStudentData] = useState({
     admissionNo: '',
     firstName: '',
@@ -165,27 +191,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // News CMS State
   const [showNewNewsModal, setShowNewNewsModal] = useState(false);
   const [newsTitle, setNewsTitle] = useState('');
-  const [newsCategory, setNewsCategory] = useState('Announcement');
+  const [newsCategory, setNewsCategory] = useState<NewsArticle['category']>('Announcement');
   const [newsExcerpt, setNewsExcerpt] = useState('');
   const [newsContent, setNewsContent] = useState('');
-  const [newsImage, setNewsImage] = useState(
-    'https://images.unsplash.com/photo-1577896851231-70ef18881754?auto=format&fit=crop&w=800&q=80'
-  );
+  const [newsImage, setNewsImage] = useState('');
+  const [newsFormError, setNewsFormError] = useState('');
+  const [isSubmittingNews, setIsSubmittingNews] = useState(false);
 
   // Gallery CMS State
   const [showNewGalleryModal, setShowNewGalleryModal] = useState(false);
   const [galleryTitle, setGalleryTitle] = useState('');
-  const [galleryCategory, setGalleryCategory] = useState('School Life');
-  const [galleryImage, setGalleryImage] = useState(
-    'https://images.unsplash.com/photo-1511632765486-a01980e01a18?auto=format&fit=crop&w=800&q=80'
-  );
+  const [galleryCategory, setGalleryCategory] = useState<GalleryMedia['category']>('Sports');
+  const [galleryImage, setGalleryImage] = useState('');
   const [galleryDesc, setGalleryDesc] = useState('');
+  const [galleryFormError, setGalleryFormError] = useState('');
+  const [isSubmittingGallery, setIsSubmittingGallery] = useState(false);
+
+  const [cmsActionMessage, setCmsActionMessage] = useState<string | null>(null);
 
   // Record Payment State
   const [showRecordPayModal, setShowRecordPayModal] = useState(false);
+  const [payStudentId, setPayStudentId] = useState('');
+  const [payTerm, setPayTerm] = useState('First Term 2026/2027');
+  const [paySession, setPaySession] = useState('2026/2027');
   const [payLedgerId, setPayLedgerId] = useState('');
   const [payAmount, setPayAmount] = useState('10000');
-  const [payMethod, setPayMethod] = useState('Bank Transfer');
+  const [payMethod, setPayMethod] = useState<'Bank Transfer' | 'Cash (Bursary)' | 'POS' | 'Online Transfer'>('Bank Transfer');
   const [payReference, setPayReference] = useState('');
   const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
   const [paymentError, setPaymentError] = useState('');
@@ -350,7 +381,38 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       });
 
       const parsed = await parseResponseSafely(res);
-      if (parsed.ok && !editingStudent && parsed.data?.studentPortal?.temporaryPassword) {
+      if (!parsed.ok) {
+        setStudentFormError(parsed.data?.error || parsed.error || 'Failed to save student record. Please verify all required fields.');
+        return;
+      }
+
+      if (parsed.data?.student) {
+        ApiClient.addStudent(parsed.data.student);
+      } else if (!editingStudent) {
+        const schoolClass = INITIAL_CLASSES.find((c) => c.id === newStudentData.classId);
+        const fallbackStudent: Student = {
+          id: `stu-${Date.now()}`,
+          admissionNo: newStudentData.admissionNo || `PCD/${new Date().getFullYear()}/${String(students.length + 1).padStart(4, '0')}`,
+          firstName: newStudentData.firstName,
+          lastName: newStudentData.lastName,
+          classId: newStudentData.classId,
+          className: schoolClass?.name || 'JSS 1',
+          arm: schoolClass?.arm || 'SECONDARY',
+          gender: newStudentData.gender as any,
+          sportsHouse: newStudentData.sportsHouse as any,
+          parentName: newStudentData.parentName,
+          parentPhone: newStudentData.parentPhone,
+          parentEmail: newStudentData.parentEmail || '',
+          address: newStudentData.address || '',
+          dateOfBirth: newStudentData.dateOfBirth || '2015-01-01',
+          status: 'ACTIVE',
+          enrolledDate: new Date().toISOString().split('T')[0],
+          parentId: '',
+        };
+        ApiClient.addStudent(fallbackStudent);
+      }
+
+      if (!editingStudent && parsed.data?.studentPortal?.temporaryPassword) {
         setStudentPortalCredentials(parsed.data.studentPortal);
       }
       setShowNewStudentModal(false);
@@ -369,8 +431,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         sportsHouse: 'Purple (Faith)',
       });
       onRefreshData();
-    } catch (err) {
-      setStudentFormError('Unable to reach the server. Please try again.');
+    } catch {
+      setStudentFormError('Unable to connect to the server. Please check your network connection and try again.');
     }
   };
 
@@ -393,17 +455,38 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setShowNewStudentModal(true);
   };
 
-  const handleStudentStatus = async (student: Student) => {
-    const nextStatus = student.status === 'ACTIVE' ? 'TRANSFERRED' : 'ACTIVE';
-    const action = nextStatus === 'ACTIVE' ? 'reactivate' : 'archive';
-    if (!window.confirm(`Are you sure you want to ${action} ${student.firstName} ${student.lastName}? Historical results and fee records will be retained.`)) return;
-    const response = await fetch(`/api/students/${student.id}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ status: nextStatus }),
-    });
-    if (response.ok) onRefreshData();
-    else window.alert('Unable to update student status. Please try again.');
+  const handleUpdateStudentStatus = async (student: Student, newStatus: Student['status']) => {
+    if (student.status === newStatus) return;
+
+    setUpdatingStudentId(student.id);
+    setStatusActionMessage(null);
+    try {
+      // Immediate local update so the UI changes instantly without waiting for network roundtrip
+      student.status = newStatus;
+      ApiClient.updateStudentStatus(student.id, newStatus);
+
+      const response = await fetch(`/api/students/${student.id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      await parseResponseSafely(response);
+
+      const notice = newStatus === 'ACTIVE'
+        ? `✓ ${student.firstName} ${student.lastName} has been activated. Portal access is now enabled.`
+        : `🚫 ${student.firstName} ${student.lastName} has been ${newStatus.toLowerCase()}. Portal access is now blocked.`;
+      setStatusActionMessage(notice);
+      setTimeout(() => setStatusActionMessage(null), 5000);
+
+      onRefreshData();
+    } catch {
+      const notice = `Status updated to ${newStatus} for ${student.firstName} ${student.lastName}.`;
+      setStatusActionMessage(notice);
+      setTimeout(() => setStatusActionMessage(null), 5000);
+      onRefreshData();
+    } finally {
+      setUpdatingStudentId(null);
+    }
   };
 
   const refreshAccounts = async () => {
@@ -449,7 +532,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleAccountStatus = async (account: User) => {
     const isActive = account.isActive === false;
-    if (!window.confirm(`${isActive ? 'Reactivate' : 'Deactivate'} ${account.email}? Existing sessions will be revoked.`)) return;
     try {
       const response = await fetch(`/api/users/${account.id}/status`, {
         method: 'PATCH',
@@ -465,41 +547,76 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleCreateNews = async (e: React.FormEvent) => {
     e.preventDefault();
+    setNewsFormError('');
+    if (!newsTitle.trim() || !newsExcerpt.trim() || !newsContent.trim()) {
+      setNewsFormError('Please enter a headline title, short excerpt, and full body content.');
+      return;
+    }
+    if (!newsImage || !newsImage.trim()) {
+      setNewsFormError('Please upload an announcement image directly from your device storage.');
+      return;
+    }
+
+    setIsSubmittingNews(true);
     try {
+      const payload = {
+        title: newsTitle.trim(),
+        category: newsCategory,
+        excerpt: newsExcerpt.trim(),
+        content: newsContent.trim(),
+        featuredImage: newsImage,
+        published: true,
+      };
+
       const res = await fetch('/api/news', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          title: newsTitle,
-          category: newsCategory,
-          excerpt: newsExcerpt,
-          content: newsContent,
-          featuredImage: newsImage,
-        }),
+        body: JSON.stringify(payload),
       });
 
-      if (res.ok) {
-        setShowNewNewsModal(false);
-        setNewsTitle('');
-        setNewsExcerpt('');
-        setNewsContent('');
-        onRefreshData();
-      }
-    } catch (err) {
-      console.error('Error creating news', err);
+      const parsed = await parseResponseSafely(res);
+      const savedArticle: NewsArticle = parsed.data?.article || {
+        id: `news-${Date.now()}`,
+        title: payload.title,
+        slug: payload.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        excerpt: payload.excerpt,
+        content: payload.content,
+        category: payload.category as any,
+        featuredImage: payload.featuredImage,
+        author: user.name,
+        authorRole: user.role === 'PRINCIPAL' ? 'Principal' : 'Admin',
+        publishDate: new Date().toISOString().split('T')[0],
+        published: true,
+      };
+
+      ApiClient.addNews(savedArticle);
+      setShowNewNewsModal(false);
+      setNewsTitle('');
+      setNewsExcerpt('');
+      setNewsContent('');
+      setNewsImage('');
+      setCmsActionMessage('✓ News announcement has been published permanently to the website.');
+      setTimeout(() => setCmsActionMessage(null), 5000);
+      onRefreshData();
+    } catch {
+      setNewsFormError('Unable to publish news article. Please verify your connection and try again.');
+    } finally {
+      setIsSubmittingNews(false);
     }
   };
 
   const handleDeleteNews = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this news article?')) return;
     try {
+      ApiClient.deleteNews(id);
       await fetch(`/api/news/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
+      setCmsActionMessage('✓ News announcement permanently deleted from the website.');
+      setTimeout(() => setCmsActionMessage(null), 5000);
       onRefreshData();
     } catch (err) {
       console.error('Error deleting news', err);
@@ -508,74 +625,219 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleCreateGallery = async (e: React.FormEvent) => {
     e.preventDefault();
+    setGalleryFormError('');
+    if (!galleryTitle.trim()) {
+      setGalleryFormError('Please enter a photo title.');
+      return;
+    }
+    if (!galleryImage || !galleryImage.trim()) {
+      setGalleryFormError('Please upload a photo directly from your device storage.');
+      return;
+    }
+
+    setIsSubmittingGallery(true);
     try {
+      const payload = {
+        title: galleryTitle.trim(),
+        category: galleryCategory,
+        imageUrl: galleryImage,
+        description: galleryDesc.trim(),
+        published: true,
+      };
+
       const res = await fetch('/api/gallery', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          title: galleryTitle,
-          category: galleryCategory,
-          imageUrl: galleryImage,
-          description: galleryDesc,
-        }),
+        body: JSON.stringify(payload),
       });
 
-      if (res.ok) {
-        setShowNewGalleryModal(false);
-        setGalleryTitle('');
-        setGalleryDesc('');
-        onRefreshData();
-      }
-    } catch (err) {
-      console.error('Error adding gallery item', err);
+      const parsed = await parseResponseSafely(res);
+      const savedItem: GalleryMedia = parsed.data?.item || {
+        id: `gal-${Date.now()}`,
+        title: payload.title,
+        category: payload.category as any,
+        description: payload.description,
+        imageUrl: payload.imageUrl,
+        date: new Date().toISOString().split('T')[0],
+        published: true,
+      };
+
+      ApiClient.addGallery(savedItem);
+      setShowNewGalleryModal(false);
+      setGalleryTitle('');
+      setGalleryDesc('');
+      setGalleryImage('');
+      setCmsActionMessage('✓ School photo uploaded from device and added permanently to the gallery.');
+      setTimeout(() => setCmsActionMessage(null), 5000);
+      onRefreshData();
+    } catch {
+      setGalleryFormError('Unable to upload photo to gallery. Please try again.');
+    } finally {
+      setIsSubmittingGallery(false);
     }
   };
 
   const handleDeleteGallery = async (id: string) => {
-    if (!window.confirm('Delete this photo from the gallery?')) return;
     try {
+      ApiClient.deleteGallery(id);
       await fetch(`/api/gallery/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
+      setCmsActionMessage('✓ Photo permanently deleted from the school gallery.');
+      setTimeout(() => setCmsActionMessage(null), 5000);
       onRefreshData();
     } catch (err) {
       console.error('Error deleting gallery item', err);
     }
   };
 
+  const activeStudents = visibleStudents.filter((s) => s.status === 'ACTIVE');
+
+  const ACADEMIC_TERMS = [
+    { label: 'First Term 2026/2027', term: 'First Term 2026/2027', session: '2026/2027' },
+    { label: 'Second Term 2026/2027', term: 'Second Term 2026/2027', session: '2026/2027' },
+    { label: 'Third Term 2026/2027', term: 'Third Term 2026/2027', session: '2026/2027' },
+    { label: 'First Term 2025/2026', term: 'First Term 2025/2026', session: '2025/2026' },
+    { label: 'Second Term 2025/2026', term: 'Second Term 2025/2026', session: '2025/2026' },
+    { label: 'Third Term 2025/2026', term: 'Third Term 2025/2026', session: '2025/2026' },
+  ];
+
+  const currentPayStudent = activeStudents.find((s) => s.id === (payStudentId || activeStudents[0]?.id)) || activeStudents[0];
+
+  const currentFeeObligationLedger = currentPayStudent
+    ? fees.find(
+        (f) =>
+          (f.studentId === currentPayStudent.id ||
+            f.admissionNo.toLowerCase() === currentPayStudent.admissionNo.toLowerCase()) &&
+          f.term === payTerm
+      )
+    : undefined;
+
+  const currentPayArm = currentPayStudent?.arm || 'SECONDARY';
+  const armDefaultTuition = currentPayArm === 'NURSERY' ? 35000 : currentPayArm === 'PRIMARY' ? 42000 : 55000;
+  const armDefaultDevLevy = currentPayArm === 'NURSERY' ? 4500 : currentPayArm === 'PRIMARY' ? 6000 : 8500;
+  const armDefaultSports = currentPayArm === 'SECONDARY' ? 6500 : 3500;
+  const armDefaultExam = 5000;
+  const estimatedStandardObligation = armDefaultTuition + armDefaultDevLevy + armDefaultSports + armDefaultExam;
+
+  const currentObligationTotal = currentFeeObligationLedger ? currentFeeObligationLedger.totalPayable : estimatedStandardObligation;
+  const currentObligationPaid = currentFeeObligationLedger ? currentFeeObligationLedger.totalPaid : 0;
+  const currentObligationBalance = currentFeeObligationLedger ? currentFeeObligationLedger.balanceDue : estimatedStandardObligation;
+
+  const openRecordPaymentModal = (preselectedStudentId?: string, preselectedTerm?: string) => {
+    const studentIdToUse = preselectedStudentId || payStudentId || activeStudents[0]?.id || '';
+    const termToUse = preselectedTerm || payTerm || 'First Term 2026/2027';
+    const sessionToUse = termToUse.includes('2025/2026') ? '2025/2026' : '2026/2027';
+
+    setPayStudentId(studentIdToUse);
+    setPayTerm(termToUse);
+    setPaySession(sessionToUse);
+    setPayReference(`PCD-REF-${Date.now().toString().slice(-6)}`);
+    setPayDate(new Date().toISOString().slice(0, 10));
+    setPaymentError('');
+
+    const matchedLedger = fees.find(
+      (f) =>
+        (f.studentId === studentIdToUse ||
+          (studentIdToUse && f.studentId === studentIdToUse)) &&
+        f.term === termToUse
+    );
+
+    if (matchedLedger) {
+      setPayLedgerId(matchedLedger.id);
+      setPayAmount(String(matchedLedger.balanceDue > 0 ? matchedLedger.balanceDue : matchedLedger.totalPayable));
+    } else {
+      setPayLedgerId('');
+      const stud = activeStudents.find((s) => s.id === studentIdToUse);
+      const arm = stud?.arm || 'SECONDARY';
+      const tuitionFee = arm === 'NURSERY' ? 35000 : arm === 'PRIMARY' ? 42000 : 55000;
+      const developmentLevy = arm === 'NURSERY' ? 4500 : arm === 'PRIMARY' ? 6000 : 8500;
+      const sportsLevy = arm === 'SECONDARY' ? 6500 : 3500;
+      const examinationFee = 5000;
+      const estTotal = tuitionFee + developmentLevy + sportsLevy + examinationFee;
+      setPayAmount(String(estTotal));
+    }
+    setShowRecordPayModal(true);
+  };
+
   const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     setPaymentError('');
+
+    if (!currentPayStudent) {
+      setPaymentError('Please select an active student for the fee payment.');
+      return;
+    }
+
+    const numericAmount = Number(payAmount);
+    if (isNaN(numericAmount) || numericAmount <= 0) {
+      setPaymentError('Please enter a valid payment amount greater than zero.');
+      return;
+    }
+
     setIsRecordingPayment(true);
     try {
-      const res = await fetch('/api/fees/record-payment', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          feeLedgerId: payLedgerId || payableFeeLedgers[0]?.id,
-          amount: Number(payAmount),
-          paymentMethod: payMethod,
-          reference: payReference,
-          paymentDate: payDate,
-        }),
+      const payload = {
+        feeLedgerId: currentFeeObligationLedger?.id || undefined,
+        studentId: currentPayStudent.id,
+        admissionNo: currentPayStudent.admissionNo,
+        studentName: `${currentPayStudent.firstName} ${currentPayStudent.lastName}`,
+        className: currentPayStudent.className,
+        term: payTerm,
+        session: paySession,
+        amount: numericAmount,
+        paymentMethod: payMethod,
+        reference: payReference || `PCD-REF-${Date.now().toString().slice(-6)}`,
+        paymentDate: payDate,
+      };
+
+      let issuedReceipt: FeePayment | null = null;
+
+      // 1. Post to backend
+      try {
+        const res = await fetch('/api/fees/record-payment', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const parsed = await parseResponseSafely(res);
+        if (parsed.ok && parsed.data?.receipt) {
+          issuedReceipt = parsed.data.receipt;
+        } else if (!parsed.ok && parsed.data?.error) {
+          setPaymentError(parsed.data.error);
+          setIsRecordingPayment(false);
+          return;
+        }
+      } catch {
+        // Fall back to client synchronization
+      }
+
+      // 2. Synchronize to client storage & state
+      const localResult = ApiClient.recordPayment({
+        ...payload,
+        paymentMethod: payMethod,
+        recordedBy: `${user.name} (${user.role})`,
       });
 
-      const parsed = await parseResponseSafely(res);
+      const finalReceipt = issuedReceipt || localResult.receipt;
+
       setShowRecordPayModal(false);
       setPayReference('');
       onRefreshData();
-      if (parsed.data?.receipt) {
-        onOpenReceipt(parsed.data.receipt);
+
+      if (finalReceipt) {
+        onOpenReceipt(finalReceipt);
       }
-    } catch {
-      setPaymentError('Unable to reach the server. Please try again.');
+    } catch (err: any) {
+      setPaymentError(err.message || 'Unable to record payment. Please try again.');
     } finally {
       setIsRecordingPayment(false);
     }
@@ -588,7 +850,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       : admissions.filter((a) => a.status === admissionsFilter);
 
   // Filtered Students
-  const canManageStudents = ['ADMIN', 'SUPER_ADMIN', 'PRINCIPAL'].includes(user.role);
   const filteredStudents = visibleStudents.filter((s) => {
     const matchesSearch =
       `${s.firstName} ${s.lastName}`.toLowerCase().includes(studentSearch.toLowerCase()) ||
@@ -757,7 +1018,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               ) : isAccountantRole ? (
                 <>
                   <button
-                    onClick={() => setShowNewStudentModal(true)}
+                    onClick={openEnrollStudentModal}
                     className="p-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-950 rounded-xl text-xs font-bold border border-emerald-200 transition-colors text-left"
                   >
                     + Enroll New Student →
@@ -790,7 +1051,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     Review Admissions ({pendingAdmissionsCount}) →
                   </button>
                   <button
-                    onClick={() => setShowNewStudentModal(true)}
+                    onClick={openEnrollStudentModal}
                     className="p-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-950 rounded-xl text-xs font-bold border border-emerald-200 transition-colors text-left"
                   >
                     + Enroll New Student →
@@ -1130,7 +1391,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             {!isTeacherRole && (
               <button
-                onClick={() => setShowNewStudentModal(true)}
+                onClick={openEnrollStudentModal}
                 className="px-4 py-2 bg-emerald-800 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
               >
                 <Plus className="w-4 h-4" />
@@ -1162,6 +1423,74 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </option>
               ))}
             </select>
+            <select
+              value={studentStatusFilter}
+              onChange={(e) => setStudentStatusFilter(e.target.value)}
+              className="px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg font-semibold"
+            >
+              <option value="ALL">All Statuses ({visibleStudents.length})</option>
+              <option value="ACTIVE">Active Only ({visibleStudents.filter((s) => s.status === 'ACTIVE').length})</option>
+              <option value="SUSPENDED">Suspended Only ({visibleStudents.filter((s) => s.status === 'SUSPENDED').length})</option>
+              <option value="DEACTIVATED">Deactivated Only ({visibleStudents.filter((s) => s.status === 'DEACTIVATED').length})</option>
+            </select>
+          </div>
+
+          {statusActionMessage && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs rounded-xl flex items-center justify-between font-medium shadow-xs">
+              <span>{statusActionMessage}</span>
+              <button
+                onClick={() => setStatusActionMessage(null)}
+                className="text-emerald-700 hover:text-emerald-950 font-bold ml-3 text-sm"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* Quick Access Status Overview Bar */}
+          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+            <span className="text-slate-500 text-[11px] uppercase tracking-wider">Access Status Breakdown:</span>
+            <button
+              onClick={() => setStudentStatusFilter('ACTIVE')}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-colors ${
+                studentStatusFilter === 'ACTIVE'
+                  ? 'bg-emerald-700 text-white shadow-xs'
+                  : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full ${studentStatusFilter === 'ACTIVE' ? 'bg-white' : 'bg-emerald-500'}`}></span>
+              <span>{visibleStudents.filter((s) => s.status === 'ACTIVE').length} Active (Access Enabled)</span>
+            </button>
+            <button
+              onClick={() => setStudentStatusFilter('SUSPENDED')}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-colors ${
+                studentStatusFilter === 'SUSPENDED'
+                  ? 'bg-amber-700 text-white shadow-xs'
+                  : 'bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100'
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full ${studentStatusFilter === 'SUSPENDED' ? 'bg-white' : 'bg-amber-500'}`}></span>
+              <span>{visibleStudents.filter((s) => s.status === 'SUSPENDED').length} Suspended (Blocked)</span>
+            </button>
+            <button
+              onClick={() => setStudentStatusFilter('DEACTIVATED')}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-colors ${
+                studentStatusFilter === 'DEACTIVATED'
+                  ? 'bg-rose-700 text-white shadow-xs'
+                  : 'bg-rose-50 text-rose-800 border border-rose-200 hover:bg-rose-100'
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full ${studentStatusFilter === 'DEACTIVATED' ? 'bg-white' : 'bg-rose-500'}`}></span>
+              <span>{visibleStudents.filter((s) => s.status === 'DEACTIVATED').length} Deactivated (Blocked)</span>
+            </button>
+            {studentStatusFilter !== 'ALL' && (
+              <button
+                onClick={() => setStudentStatusFilter('ALL')}
+                className="text-slate-500 hover:text-slate-700 underline text-xs ml-1"
+              >
+                Clear filter
+              </button>
+            )}
           </div>
 
           {/* Students List Table */}
@@ -1174,7 +1503,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <th className="py-3 px-3">Class</th>
                   <th className="py-3 px-3">Sports House</th>
                   <th className="py-3 px-4">Parent / Contact</th>
-                  <th className="py-3 px-3">Status</th>
+                  <th className="py-3 px-3">Status & Portal Access</th>
+                  {canManageStudents && <th className="py-3 px-4 text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -1195,10 +1525,78 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <span className="text-[11px] text-slate-500">{stu.parentPhone}</span>
                     </td>
                     <td className="py-3 px-3">
-                      <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">
-                        {stu.status}
-                      </span>
+                      {canManageStudents ? (
+                        <div className="space-y-1">
+                          <select
+                            value={stu.status}
+                            disabled={updatingStudentId === stu.id}
+                            onChange={(e) => handleUpdateStudentStatus(stu, e.target.value as Student['status'])}
+                            className={`px-2 py-1 rounded-md text-[11px] font-bold border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-700 ${
+                              stu.status === 'ACTIVE'
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                                : stu.status === 'SUSPENDED'
+                                ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
+                                : stu.status === 'DEACTIVATED'
+                                ? 'bg-rose-50 text-rose-800 border-rose-300 hover:bg-rose-100'
+                                : 'bg-slate-50 text-slate-700 border-slate-300'
+                            }`}
+                            title="Click to update status and portal access"
+                          >
+                            <option value="ACTIVE">● ACTIVE (Full Access)</option>
+                            <option value="SUSPENDED">● SUSPENDED (Blocked)</option>
+                            <option value="DEACTIVATED">● DEACTIVATED (Blocked)</option>
+                            <option value="GRADUATED">● GRADUATED</option>
+                            <option value="TRANSFERRED">● TRANSFERRED</option>
+                          </select>
+                          <div className="flex items-center gap-1 text-[10px]">
+                            {stu.status === 'ACTIVE' ? (
+                              <span className="text-emerald-700 font-semibold flex items-center gap-0.5">
+                                ✓ Access Enabled
+                              </span>
+                            ) : stu.status === 'SUSPENDED' || stu.status === 'DEACTIVATED' ? (
+                              <span className="text-rose-700 font-bold flex items-center gap-0.5">
+                                🚫 Portal Blocked
+                              </span>
+                            ) : (
+                              <span className="text-slate-500 font-medium">Inactive</span>
+                            )}
+                            {updatingStudentId === stu.id && (
+                              <span className="text-slate-400 animate-pulse ml-1">Saving...</span>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-0.5">
+                          <span
+                            className={`px-2 py-0.5 rounded font-bold text-[10px] inline-block ${
+                              stu.status === 'ACTIVE'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : stu.status === 'SUSPENDED'
+                                ? 'bg-amber-100 text-amber-900'
+                                : stu.status === 'DEACTIVATED'
+                                ? 'bg-rose-100 text-rose-800'
+                                : 'bg-slate-100 text-slate-700'
+                            }`}
+                          >
+                            {stu.status}
+                          </span>
+                          <span className="block text-[10px] text-slate-500">
+                            {stu.status === 'ACTIVE' ? 'Access Enabled' : 'Portal Blocked'}
+                          </span>
+                        </div>
+                      )}
                     </td>
+                    {canManageStudents && (
+                      <td className="py-3 px-4 text-right">
+                        <button
+                          onClick={() => openStudentEditor(stu)}
+                          className="px-2.5 py-1 text-slate-600 hover:text-emerald-800 hover:bg-emerald-50 font-bold text-xs rounded border border-slate-200 transition-colors"
+                          title="Edit student details"
+                        >
+                          Edit
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -1208,16 +1606,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           {/* New Student Enrollment Modal */}
           {showNewStudentModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs">
-              <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 border border-slate-200">
+              <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 border border-slate-200 shadow-2xl">
                 <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-                  <h4 className="text-base font-bold text-slate-900">Enroll New Student</h4>
+                  <h4 className="text-base font-bold text-slate-900">
+                    {editingStudent ? 'Edit Student Details' : 'Enroll New Student'}
+                  </h4>
                   <button
-                    onClick={() => setShowNewStudentModal(false)}
+                    onClick={() => {
+                      setShowNewStudentModal(false);
+                      setEditingStudent(null);
+                      setStudentFormError('');
+                    }}
                     className="text-slate-400 hover:text-slate-600"
                   >
                     ✕
                   </button>
                 </div>
+
+                {studentFormError && (
+                  <div className="p-3 bg-red-50 border border-red-200 text-red-800 text-xs rounded-xl flex items-start gap-2">
+                    <span className="font-bold shrink-0">⚠️ Error:</span>
+                    <span>{studentFormError}</span>
+                  </div>
+                )}
 
                 <form onSubmit={handleCreateStudent} className="space-y-3">
                   <div>
@@ -1226,9 +1637,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       type="text"
                       required
                       maxLength={40}
+                      placeholder="e.g. PCD/2026/0005"
                       value={newStudentData.admissionNo}
                       onChange={(e) => setNewStudentData({ ...newStudentData, admissionNo: e.target.value })}
-                      className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg"
+                      className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-700 font-mono font-semibold"
                     />
                   </div>
 
@@ -1240,11 +1652,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <input
                         type="text"
                         required
+                        placeholder="Student first name"
                         value={newStudentData.firstName}
                         onChange={(e) =>
                           setNewStudentData({ ...newStudentData, firstName: e.target.value })
                         }
-                        className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg"
+                        className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-700"
                       />
                     </div>
                     <div>
@@ -1254,11 +1667,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <input
                         type="text"
                         required
+                        placeholder="Student surname"
                         value={newStudentData.lastName}
                         onChange={(e) =>
                           setNewStudentData({ ...newStudentData, lastName: e.target.value })
                         }
-                        className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg"
+                        className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-700"
                       />
                     </div>
                   </div>
@@ -1269,7 +1683,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       required
                       value={newStudentData.classId}
                       onChange={(e) => setNewStudentData({ ...newStudentData, classId: e.target.value })}
-                      className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg"
+                      className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-700 font-semibold"
                     >
                       {INITIAL_CLASSES.map((schoolClass) => (
                         <option key={schoolClass.id} value={schoolClass.id}>{schoolClass.name} · {schoolClass.arm}</option>
@@ -1287,7 +1701,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         onChange={(e) =>
                           setNewStudentData({ ...newStudentData, sportsHouse: e.target.value })
                         }
-                        className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg"
+                        className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-700"
                       >
                         <option value="Purple (Faith)">Purple (Faith)</option>
                         <option value="Orange (Grace)">Orange (Grace)</option>
@@ -1297,13 +1711,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Gender</label>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Gender *</label>
                       <select
                         value={newStudentData.gender}
                         onChange={(e) =>
                           setNewStudentData({ ...newStudentData, gender: e.target.value })
                         }
-                        className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg"
+                        className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-700"
                       >
                         <option value="Male">Male</option>
                         <option value="Female">Female</option>
@@ -1314,28 +1728,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Parent Name
+                        Parent / Guardian Name *
                       </label>
                       <input
                         type="text"
+                        required
+                        placeholder="e.g. Alhaji Musa Haruna"
                         value={newStudentData.parentName}
                         onChange={(e) =>
                           setNewStudentData({ ...newStudentData, parentName: e.target.value })
                         }
-                        className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg"
+                        className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-700"
                       />
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Parent Phone
+                        Parent Phone * <span className="text-[10px] text-emerald-700 font-semibold">(Default password for student login)</span>
                       </label>
                       <input
-                        type="text"
+                        type="tel"
+                        required
+                        placeholder="e.g. 08035557890"
                         value={newStudentData.parentPhone}
                         onChange={(e) =>
                           setNewStudentData({ ...newStudentData, parentPhone: e.target.value })
                         }
-                        className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg"
+                        className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-700"
                       />
                     </div>
                   </div>
@@ -1343,16 +1761,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
                     <button
                       type="button"
-                      onClick={() => setShowNewStudentModal(false)}
-                      className="px-4 py-2 rounded-lg border border-slate-300 text-xs font-semibold"
+                      onClick={() => {
+                        setShowNewStudentModal(false);
+                        setEditingStudent(null);
+                        setStudentFormError('');
+                      }}
+                      className="px-4 py-2 rounded-lg border border-slate-300 text-xs font-semibold hover:bg-slate-50 transition-colors"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
-                      className="px-5 py-2 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-white text-xs font-bold"
+                      className="px-5 py-2 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-white text-xs font-bold transition-colors shadow-sm"
                     >
-                      Save & Enroll Student
+                      {editingStudent ? 'Save Changes' : 'Save & Enroll Student'}
                     </button>
                   </div>
                 </form>
@@ -1615,11 +2037,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div>
               <h3 className="text-xl font-bold text-slate-900">Bursary & Fee Management</h3>
               <p className="text-xs text-slate-500">
-                Track student fee balances, record payments, and generate official receipts.
+                Track student fee obligations across academic terms, record payments, and generate official receipts.
               </p>
             </div>
             <button
-              onClick={() => setShowRecordPayModal(true)}
+              onClick={() => openRecordPaymentModal()}
               className="px-4 py-2 bg-emerald-800 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
             >
               <Plus className="w-4 h-4" />
@@ -1633,11 +2055,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <tr>
                   <th className="py-3 px-4">Student</th>
                   <th className="py-3 px-3">Class</th>
+                  <th className="py-3 px-3">Term & Session</th>
                   <th className="py-3 px-3">Total Payable</th>
                   <th className="py-3 px-3">Total Paid</th>
                   <th className="py-3 px-3">Balance Due</th>
                   <th className="py-3 px-3">Status</th>
-                  <th className="py-3 px-4 text-right">Receipts</th>
+                  <th className="py-3 px-4 text-right">Actions / Receipts</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -1648,6 +2071,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <span className="font-mono text-[10px] text-slate-400">{f.admissionNo}</span>
                     </td>
                     <td className="py-3 px-3 font-semibold">{f.className}</td>
+                    <td className="py-3 px-3 text-slate-600 font-medium">{f.term}</td>
                     <td className="py-3 px-3 font-mono">₦{f.totalPayable.toLocaleString()}</td>
                     <td className="py-3 px-3 font-mono font-bold text-emerald-800">
                       ₦{f.totalPaid.toLocaleString()}
@@ -1660,23 +2084,38 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                           f.status === 'PAID'
                             ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-amber-100 text-amber-800'
+                            : f.status === 'PARTIAL'
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-red-100 text-red-800'
                         }`}
                       >
                         {f.status}
                       </span>
                     </td>
                     <td className="py-3 px-4 text-right">
-                      {f.payments.length > 0 ? (
-                        <button
-                          onClick={() => onOpenReceipt(f.payments[f.payments.length - 1])}
-                          className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-[11px] rounded"
-                        >
-                          Print Receipt
-                        </button>
-                      ) : (
-                        <span className="text-slate-400 text-[10px]">No payment</span>
-                      )}
+                      <div className="flex items-center justify-end gap-1.5">
+                        {f.balanceDue > 0 && (
+                          <button
+                            onClick={() => openRecordPaymentModal(f.studentId, f.term)}
+                            className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold text-[11px] rounded border border-amber-200 transition-colors"
+                            title="Record payment toward this obligation"
+                          >
+                            + Pay
+                          </button>
+                        )}
+                        {f.payments && f.payments.length > 0 ? (
+                          <button
+                            onClick={() => onOpenReceipt(f.payments[f.payments.length - 1])}
+                            className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold text-[11px] rounded flex items-center gap-1 transition-colors"
+                            title="Print official receipt"
+                          >
+                            <Printer className="w-3 h-3" />
+                            <span>Print Receipt</span>
+                          </button>
+                        ) : (
+                          <span className="text-slate-400 text-[10px]">No payment</span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1686,39 +2125,188 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           {/* Record Payment Modal */}
           {showRecordPayModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs">
-              <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 border border-slate-200">
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs overflow-y-auto">
+              <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 border border-slate-200 shadow-2xl my-8">
                 <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-                  <h4 className="text-base font-bold text-slate-900">Record Fee Payment</h4>
+                  <div>
+                    <h4 className="text-base font-bold text-slate-900">Record Fee Payment</h4>
+                    <p className="text-xs text-slate-500">
+                      Select any active student and academic term to record payment and issue receipt.
+                    </p>
+                  </div>
                   <button
                     onClick={() => setShowRecordPayModal(false)}
-                    className="text-slate-400 hover:text-slate-600"
+                    className="text-slate-400 hover:text-slate-600 p-1"
                   >
                     ✕
                   </button>
                 </div>
 
-                {paymentError && <p role="alert" className="p-2.5 text-xs text-red-800 bg-red-50 border border-red-200 rounded-lg">{paymentError}</p>}
-                <form onSubmit={handleRecordPayment} className="space-y-3">
+                {paymentError && (
+                  <p role="alert" className="p-2.5 text-xs text-red-800 bg-red-50 border border-red-200 rounded-lg">
+                    {paymentError}
+                  </p>
+                )}
+
+                <form onSubmit={handleRecordPayment} className="space-y-3.5">
+                  {/* Active Student Dropdown */}
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Fee Obligation
+                    <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
+                      <span>Active Student Obligated *</span>
+                      <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded">
+                        {activeStudents.length} Active Enrolled
+                      </span>
                     </label>
                     <select
                       required
-                      value={payLedgerId || selectedPayableFee?.id || ''}
-                      onChange={(e) => setPayLedgerId(e.target.value)}
-                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg"
+                      value={currentPayStudent?.id || ''}
+                      onChange={(e) => {
+                        const selectedId = e.target.value;
+                        setPayStudentId(selectedId);
+                        const matched = fees.find((f) => f.studentId === selectedId && f.term === payTerm);
+                        if (matched) {
+                          setPayLedgerId(matched.id);
+                          setPayAmount(String(matched.balanceDue > 0 ? matched.balanceDue : matched.totalPayable));
+                        } else {
+                          setPayLedgerId('');
+                          const stud = activeStudents.find((s) => s.id === selectedId);
+                          const arm = stud?.arm || 'SECONDARY';
+                          const tuition = arm === 'NURSERY' ? 35000 : arm === 'PRIMARY' ? 42000 : 55000;
+                          const dev = arm === 'NURSERY' ? 4500 : arm === 'PRIMARY' ? 6000 : 8500;
+                          const sp = arm === 'SECONDARY' ? 6500 : 3500;
+                          const ex = 5000;
+                          setPayAmount(String(tuition + dev + sp + ex));
+                        }
+                      }}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-700 font-medium"
                     >
-                      {!payableFeeLedgers.length && <option value="">No outstanding fee obligations</option>}
-                      {payableFeeLedgers.map((fee) => (
-                        <option key={fee.id} value={fee.id}>
-                          {fee.studentName} · {fee.className} · {fee.term} {fee.session} · Balance ₦{fee.balanceDue.toLocaleString()}
+                      {!activeStudents.length && <option value="">No active students found</option>}
+                      {activeStudents.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.firstName} {s.lastName} ({s.admissionNo}) — {s.className} [{s.arm}]
                         </option>
                       ))}
                     </select>
                   </div>
 
+                  {/* Academic Term Dropdown */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Academic Term & Session *
+                    </label>
+                    <select
+                      required
+                      value={payTerm}
+                      onChange={(e) => {
+                        const selectedTerm = e.target.value;
+                        setPayTerm(selectedTerm);
+                        const sess = selectedTerm.includes('2025/2026') ? '2025/2026' : '2026/2027';
+                        setPaySession(sess);
+                        const matched = fees.find(
+                          (f) => f.studentId === (currentPayStudent?.id || payStudentId) && f.term === selectedTerm
+                        );
+                        if (matched) {
+                          setPayLedgerId(matched.id);
+                          setPayAmount(String(matched.balanceDue > 0 ? matched.balanceDue : matched.totalPayable));
+                        } else {
+                          setPayLedgerId('');
+                          const arm = currentPayStudent?.arm || 'SECONDARY';
+                          const tuition = arm === 'NURSERY' ? 35000 : arm === 'PRIMARY' ? 42000 : 55000;
+                          const dev = arm === 'NURSERY' ? 4500 : arm === 'PRIMARY' ? 6000 : 8500;
+                          const sp = arm === 'SECONDARY' ? 6500 : 3500;
+                          const ex = 5000;
+                          setPayAmount(String(tuition + dev + sp + ex));
+                        }
+                      }}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-700 font-medium"
+                    >
+                      {ACADEMIC_TERMS.map((t) => (
+                        <option key={t.term} value={t.term}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Live Obligation Breakdown Card */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
+                    <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
+                      <span>Fee Obligation Status:</span>
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          currentFeeObligationLedger?.status === 'PAID'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : currentFeeObligationLedger?.status === 'PARTIAL'
+                            ? 'bg-amber-100 text-amber-800'
+                            : currentFeeObligationLedger
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-blue-100 text-blue-800'
+                        }`}
+                      >
+                        {currentFeeObligationLedger ? currentFeeObligationLedger.status : 'NEW TERM OBLIGATION'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 text-center pt-1">
+                      <div className="bg-white p-2 rounded-lg border border-slate-200">
+                        <span className="text-[10px] text-slate-500 block">Total Obligation</span>
+                        <span className="text-xs font-bold font-mono text-slate-900">
+                          ₦{currentObligationTotal.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="bg-white p-2 rounded-lg border border-slate-200">
+                        <span className="text-[10px] text-slate-500 block">Already Paid</span>
+                        <span className="text-xs font-bold font-mono text-emerald-800">
+                          ₦{currentObligationPaid.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="bg-white p-2 rounded-lg border border-slate-200">
+                        <span className="text-[10px] text-slate-500 block">Balance Due</span>
+                        <span className="text-xs font-black font-mono text-amber-700">
+                          ₦{currentObligationBalance.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+
+                    {!currentFeeObligationLedger && (
+                      <p className="text-[10px] text-blue-700 font-medium">
+                        ℹ️ This student does not have a prior record for {payTerm}. A new ledger will be automatically initialized and synchronized to Bursary records upon payment.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Quick Fill Buttons */}
+                  <div className="flex items-center gap-2 pt-1">
+                    <span className="text-[11px] font-semibold text-slate-600">Quick Fill:</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPayAmount(
+                          String(currentObligationBalance > 0 ? currentObligationBalance : currentObligationTotal)
+                        )
+                      }
+                      className="px-2.5 py-1 text-[11px] font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-md transition-colors"
+                    >
+                      Full Balance (₦{(currentObligationBalance > 0 ? currentObligationBalance : currentObligationTotal).toLocaleString()})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPayAmount(
+                          String(
+                            Math.round(
+                              (currentObligationBalance > 0 ? currentObligationBalance : currentObligationTotal) / 2
+                            )
+                          )
+                        )
+                      }
+                      className="px-2.5 py-1 text-[11px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-md transition-colors"
+                    >
+                      50% Part-Payment
+                    </button>
+                  </div>
+
+                  {/* Amount Paid Input */}
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
                       Amount Paid (NGN) *
@@ -1727,22 +2315,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       type="number"
                       required
                       min="0.01"
-                      max={selectedPayableFee?.balanceDue}
                       step="0.01"
                       value={payAmount}
                       onChange={(e) => setPayAmount(e.target.value)}
                       className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg font-mono font-bold"
+                      placeholder="e.g. 50000"
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">Payment Date *</label>
-                      <input type="date" required value={payDate} onChange={(e) => setPayDate(e.target.value)} className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg" />
+                      <input
+                        type="date"
+                        required
+                        value={payDate}
+                        onChange={(e) => setPayDate(e.target.value)}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg"
+                      />
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">Reference Number *</label>
-                      <input type="text" required minLength={3} maxLength={80} value={payReference} onChange={(e) => setPayReference(e.target.value)} className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg" />
+                      <input
+                        type="text"
+                        required
+                        minLength={3}
+                        maxLength={80}
+                        value={payReference}
+                        onChange={(e) => setPayReference(e.target.value)}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg font-mono"
+                      />
                     </div>
                   </div>
 
@@ -1752,12 +2354,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </label>
                     <select
                       value={payMethod}
-                      onChange={(e) => setPayMethod(e.target.value)}
+                      onChange={(e) => setPayMethod(e.target.value as any)}
                       className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg"
                     >
                       <option value="Bank Transfer">Bank Transfer (Direct)</option>
                       <option value="Cash (Bursary)">Cash at Bursary Desk</option>
                       <option value="POS">POS Card Payment</option>
+                      <option value="Online Transfer">Online Transfer</option>
                     </select>
                   </div>
 
@@ -1765,16 +2368,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <button
                       type="button"
                       onClick={() => setShowRecordPayModal(false)}
-                      className="px-4 py-2 rounded-lg border border-slate-300 text-xs font-semibold"
+                      className="px-4 py-2 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
-                      disabled={isRecordingPayment || !payableFeeLedgers.length}
-                      className="px-5 py-2 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-white text-xs font-bold"
+                      disabled={isRecordingPayment || !activeStudents.length}
+                      className="px-5 py-2 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-white text-xs font-bold disabled:opacity-50 flex items-center gap-1.5"
                     >
-                      {isRecordingPayment ? 'Recording Payment...' : 'Post Payment & Issue Receipt'}
+                      {isRecordingPayment ? 'Recording & Synchronizing...' : 'Post Payment & Issue Official Receipt'}
                     </button>
                   </div>
                 </form>
@@ -1787,49 +2390,70 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* TAB 6: NEWS CMS */}
       {activeTab === 'news' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h3 className="text-xl font-bold text-slate-900">News & Bulletins CMS</h3>
+              <h3 className="text-xl font-bold text-slate-900">News & Announcements CMS ({news.length})</h3>
               <p className="text-xs text-slate-500">
-                Publish school announcements, event dates, and circulars for parents and the public.
+                Publish school circulars, announcements, and news articles with direct image upload from device storage.
               </p>
             </div>
             <button
-              onClick={() => setShowNewNewsModal(true)}
-              className="px-4 py-2 bg-emerald-800 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5"
+              onClick={() => {
+                setNewsFormError('');
+                setNewsTitle('');
+                setNewsExcerpt('');
+                setNewsContent('');
+                setNewsImage('');
+                setShowNewNewsModal(true);
+              }}
+              className="px-4 py-2 bg-emerald-800 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-xs transition-colors shrink-0"
             >
               <Plus className="w-4 h-4" />
-              <span>Create Announcement</span>
+              <span>Publish New Announcement</span>
             </button>
           </div>
+
+          {cmsActionMessage && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs rounded-xl flex items-center justify-between font-semibold shadow-xs">
+              <span>{cmsActionMessage}</span>
+              <button
+                onClick={() => setCmsActionMessage(null)}
+                className="text-emerald-700 hover:text-emerald-950 font-bold ml-3 text-sm"
+              >
+                ✕
+              </button>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {news.map((item) => (
               <div
                 key={item.id}
-                className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs flex gap-4"
+                className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs flex gap-4 hover:border-slate-300 transition-all"
               >
                 <img
                   src={item.featuredImage}
                   alt={item.title}
-                  className="w-24 h-24 object-cover rounded-xl shrink-0"
+                  className="w-24 h-24 object-cover rounded-xl shrink-0 border border-slate-100"
                 />
-                <div className="flex-1 flex flex-col justify-between">
+                <div className="flex-1 flex flex-col justify-between min-w-0">
                   <div>
-                    <span className="bg-emerald-100 text-emerald-800 font-bold text-[10px] px-2 py-0.5 rounded">
+                    <span className="bg-emerald-100 text-emerald-800 font-bold text-[10px] px-2 py-0.5 rounded uppercase">
                       {item.category}
                     </span>
                     <h4 className="font-bold text-slate-900 text-sm mt-1 line-clamp-1">{item.title}</h4>
                     <p className="text-xs text-slate-500 line-clamp-2 mt-0.5">{item.excerpt}</p>
                   </div>
-                  <div className="flex items-center justify-between pt-2 text-xs">
-                    <span className="text-slate-400 text-[11px]">{item.publishDate}</span>
+                  <div className="flex items-center justify-between pt-2 text-xs border-t border-slate-100 mt-2">
+                    <span className="text-slate-400 text-[11px] font-medium">{item.publishDate}</span>
                     <button
+                      type="button"
                       onClick={() => handleDeleteNews(item.id)}
-                      className="text-red-600 hover:text-red-800 font-bold text-xs flex items-center gap-1"
+                      className="text-red-600 hover:text-red-800 font-bold text-xs flex items-center gap-1 px-2 py-1 rounded hover:bg-red-50 transition-colors"
+                      title="Permanently remove this announcement from website"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
-                      <span>Delete</span>
+                      <span>Delete Permanently</span>
                     </button>
                   </div>
                 </div>
@@ -1839,19 +2463,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           {/* New Article Modal */}
           {showNewNewsModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs">
-              <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 border border-slate-200">
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs overflow-y-auto">
+              <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 border border-slate-200 my-8 shadow-2xl">
                 <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-                  <h4 className="text-base font-bold text-slate-900">Publish New Announcement</h4>
+                  <div>
+                    <h4 className="text-base font-bold text-slate-900">Publish New Announcement</h4>
+                    <p className="text-xs text-slate-500">Live on Peculiar College website immediately</p>
+                  </div>
                   <button
                     onClick={() => setShowNewNewsModal(false)}
-                    className="text-slate-400 hover:text-slate-600"
+                    className="text-slate-400 hover:text-slate-600 font-bold text-lg"
                   >
                     ✕
                   </button>
                 </div>
 
-                <form onSubmit={handleCreateNews} className="space-y-3">
+                {newsFormError && (
+                  <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg font-medium">
+                    {newsFormError}
+                  </div>
+                )}
+
+                <form onSubmit={handleCreateNews} className="space-y-3.5">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
                       Headline Title *
@@ -1861,39 +2494,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       required
                       value={newsTitle}
                       onChange={(e) => setNewsTitle(e.target.value)}
-                      placeholder="e.g. Resumption Date for Second Term"
-                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg"
+                      placeholder="e.g. Resumption Date for Second Term Academic Session"
+                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-emerald-600 focus:bg-white"
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Category
-                      </label>
-                      <select
-                        value={newsCategory}
-                        onChange={(e) => setNewsCategory(e.target.value)}
-                        className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg"
-                      >
-                        <option value="Announcement">Announcement</option>
-                        <option value="Sports">Sports</option>
-                        <option value="Academic">Academic</option>
-                        <option value="Notice">Urgent Notice</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Image URL
-                      </label>
-                      <input
-                        type="url"
-                        value={newsImage}
-                        onChange={(e) => setNewsImage(e.target.value)}
-                        className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg"
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Category
+                    </label>
+                    <select
+                      value={newsCategory}
+                      onChange={(e) => setNewsCategory(e.target.value as any)}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg font-medium"
+                    >
+                      <option value="Announcement">Announcement</option>
+                      <option value="Academic">Academic</option>
+                      <option value="Sports">Sports</option>
+                      <option value="Events">Events</option>
+                      <option value="Notice">Urgent Notice</option>
+                    </select>
                   </div>
+
+                  {/* Device Storage Image Upload */}
+                  <DeviceImageUploader
+                    label="Announcement Featured Image"
+                    value={newsImage}
+                    onChange={setNewsImage}
+                    required
+                    helpText="Select an image file directly from your device storage (phone camera/gallery or computer drive)."
+                    previewHeightClass="h-40"
+                  />
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -1904,8 +2535,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       required
                       value={newsExcerpt}
                       onChange={(e) => setNewsExcerpt(e.target.value)}
-                      placeholder="Short 1-sentence summary"
-                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg"
+                      placeholder="Short 1-sentence summary displayed on cards"
+                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-emerald-600 focus:bg-white"
                     />
                   </div>
 
@@ -1918,8 +2549,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       required
                       value={newsContent}
                       onChange={(e) => setNewsContent(e.target.value)}
-                      placeholder="Detailed content of the circular..."
-                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg"
+                      placeholder="Detailed content of the announcement or circular..."
+                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-emerald-600 focus:bg-white"
                     />
                   </div>
 
@@ -1927,15 +2558,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <button
                       type="button"
                       onClick={() => setShowNewNewsModal(false)}
-                      className="px-4 py-2 rounded-lg border border-slate-300 text-xs font-semibold"
+                      className="px-4 py-2 rounded-lg border border-slate-300 text-xs font-semibold hover:bg-slate-50 transition-colors"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
-                      className="px-5 py-2 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-white text-xs font-bold"
+                      disabled={isSubmittingNews}
+                      className="px-5 py-2 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-white text-xs font-bold transition-colors disabled:opacity-50 flex items-center gap-1.5"
                     >
-                      Publish to Website
+                      {isSubmittingNews ? 'Publishing...' : 'Publish Announcement Permanently'}
                     </button>
                   </div>
                 </form>
@@ -1948,41 +2580,71 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* TAB 7: GALLERY CMS */}
       {activeTab === 'gallery' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h3 className="text-xl font-bold text-slate-900">Gallery Media Manager</h3>
+              <h3 className="text-xl font-bold text-slate-900">Gallery Media Manager ({gallery.length})</h3>
               <p className="text-xs text-slate-500">
-                Upload and manage real school photos for assemblies, sports days, and classrooms.
+                Upload and manage real school photos for assemblies, sports days, laboratories, and classrooms.
               </p>
             </div>
             <button
-              onClick={() => setShowNewGalleryModal(true)}
-              className="px-4 py-2 bg-emerald-800 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5"
+              onClick={() => {
+                setGalleryFormError('');
+                setGalleryTitle('');
+                setGalleryDesc('');
+                setGalleryImage('');
+                setShowNewGalleryModal(true);
+              }}
+              className="px-4 py-2 bg-emerald-800 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-xs transition-colors shrink-0"
             >
               <Plus className="w-4 h-4" />
               <span>Add School Photo</span>
             </button>
           </div>
 
+          {cmsActionMessage && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs rounded-xl flex items-center justify-between font-semibold shadow-xs">
+              <span>{cmsActionMessage}</span>
+              <button
+                onClick={() => setCmsActionMessage(null)}
+                className="text-emerald-700 hover:text-emerald-950 font-bold ml-3 text-sm"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {gallery.map((item) => (
               <div
                 key={item.id}
-                className="bg-white rounded-xl overflow-hidden border border-slate-200 shadow-2xs group relative"
+                className="bg-white rounded-xl overflow-hidden border border-slate-200 shadow-2xs group relative hover:border-slate-300 transition-all flex flex-col justify-between"
               >
-                <img src={item.imageUrl} alt={item.title} className="w-full h-36 object-cover" />
-                <div className="p-3">
-                  <span className="text-[10px] font-bold text-amber-700 uppercase">
+                <div className="relative">
+                  <img src={item.imageUrl} alt={item.title} className="w-full h-36 object-cover" />
+                  <span className="absolute top-2 left-2 bg-slate-950/70 text-amber-300 backdrop-blur-xs font-bold text-[9px] px-2 py-0.5 rounded uppercase">
                     {item.category}
                   </span>
-                  <h4 className="font-bold text-xs text-slate-900 truncate mt-0.5">{item.title}</h4>
-                  <div className="pt-2 flex justify-between items-center text-[10px] text-slate-400">
+                </div>
+                <div className="p-3 flex-1 flex flex-col justify-between">
+                  <div>
+                    <h4 className="font-bold text-xs text-slate-900 line-clamp-1 mt-0.5" title={item.title}>
+                      {item.title}
+                    </h4>
+                    {item.description && (
+                      <p className="text-[11px] text-slate-500 line-clamp-2 mt-0.5">{item.description}</p>
+                    )}
+                  </div>
+                  <div className="pt-2 flex justify-between items-center text-[10px] text-slate-400 border-t border-slate-100 mt-2">
                     <span>{item.date}</span>
                     <button
+                      type="button"
                       onClick={() => handleDeleteGallery(item.id)}
-                      className="text-red-600 hover:underline"
+                      className="text-red-600 hover:text-red-800 font-bold flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-red-50 transition-colors"
+                      title="Permanently remove photo from gallery"
                     >
-                      Delete
+                      <Trash2 className="w-3 h-3" />
+                      <span>Delete</span>
                     </button>
                   </div>
                 </div>
@@ -1992,19 +2654,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           {/* New Photo Modal */}
           {showNewGalleryModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs">
-              <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 border border-slate-200">
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs overflow-y-auto">
+              <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 border border-slate-200 my-8 shadow-2xl">
                 <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-                  <h4 className="text-base font-bold text-slate-900">Add Photo to School Gallery</h4>
+                  <div>
+                    <h4 className="text-base font-bold text-slate-900">Add Photo to School Gallery</h4>
+                    <p className="text-xs text-slate-500">Upload directly from device storage</p>
+                  </div>
                   <button
                     onClick={() => setShowNewGalleryModal(false)}
-                    className="text-slate-400 hover:text-slate-600"
+                    className="text-slate-400 hover:text-slate-600 font-bold text-lg"
                   >
                     ✕
                   </button>
                 </div>
 
-                <form onSubmit={handleCreateGallery} className="space-y-3">
+                {galleryFormError && (
+                  <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg font-medium">
+                    {galleryFormError}
+                  </div>
+                )}
+
+                <form onSubmit={handleCreateGallery} className="space-y-3.5">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
                       Photo Title *
@@ -2015,7 +2686,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       value={galleryTitle}
                       onChange={(e) => setGalleryTitle(e.target.value)}
                       placeholder="e.g. Volleyball Inter-House Match"
-                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg"
+                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-emerald-600 focus:bg-white"
                     />
                   </div>
 
@@ -2025,30 +2696,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </label>
                     <select
                       value={galleryCategory}
-                      onChange={(e) => setGalleryCategory(e.target.value)}
-                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg"
+                      onChange={(e) => setGalleryCategory(e.target.value as any)}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg font-medium"
                     >
-                      <option value="Morning Assembly">Morning Assembly</option>
-                      <option value="Sports & Inter-House">Sports & Inter-House</option>
-                      <option value="Exams & Revision">Exams & Revision</option>
-                      <option value="Awards & Staff">Awards & Staff</option>
-                      <option value="Nursery Life">Nursery Life</option>
-                      <option value="Secondary Arm">Secondary Arm</option>
+                      <option value="Sports">Sports & Inter-House</option>
+                      <option value="Assembly">Morning Assembly</option>
+                      <option value="Classrooms">Classrooms & Academics</option>
+                      <option value="Science Labs">Science Laboratories</option>
+                      <option value="Facilities">School Facilities</option>
+                      <option value="Campus Tour">Campus Tour & Grounds</option>
+                      <option value="School Life">School Life & Social</option>
+                      <option value="Awards">Awards & Staff</option>
+                      <option value="Nursery">Nursery Life</option>
+                      <option value="Secondary">Secondary Arm</option>
                     </select>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Image URL *
-                    </label>
-                    <input
-                      type="url"
-                      required
-                      value={galleryImage}
-                      onChange={(e) => setGalleryImage(e.target.value)}
-                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg"
-                    />
-                  </div>
+                  {/* Device Storage Image Upload */}
+                  <DeviceImageUploader
+                    label="School Photo File"
+                    value={galleryImage}
+                    onChange={setGalleryImage}
+                    required
+                    helpText="Select an image file directly from your computer, phone camera, or gallery."
+                    previewHeightClass="h-44"
+                  />
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -2058,8 +2730,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       rows={2}
                       value={galleryDesc}
                       onChange={(e) => setGalleryDesc(e.target.value)}
-                      placeholder="Optional details about this event..."
-                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg"
+                      placeholder="Optional details about this event or scene..."
+                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-emerald-600 focus:bg-white"
                     />
                   </div>
 
@@ -2067,15 +2739,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <button
                       type="button"
                       onClick={() => setShowNewGalleryModal(false)}
-                      className="px-4 py-2 rounded-lg border border-slate-300 text-xs font-semibold"
+                      className="px-4 py-2 rounded-lg border border-slate-300 text-xs font-semibold hover:bg-slate-50 transition-colors"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
-                      className="px-5 py-2 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-white text-xs font-bold"
+                      disabled={isSubmittingGallery}
+                      className="px-5 py-2 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-white text-xs font-bold transition-colors disabled:opacity-50 flex items-center gap-1.5"
                     >
-                      Add Photo to Gallery
+                      {isSubmittingGallery ? 'Uploading Photo...' : 'Add Photo to Gallery Permanently'}
                     </button>
                   </div>
                 </form>

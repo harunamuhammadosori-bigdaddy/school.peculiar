@@ -94,11 +94,55 @@ export function authenticateBearer(
   return match ? verifySessionToken(match[1], secret, users, nowMs) : null;
 }
 
+export function isPhoneNumberMatch(input: string, targetPhone?: string): boolean {
+  if (!input || !targetPhone) return false;
+  const cleanInput = input.trim();
+  const cleanTarget = targetPhone.trim();
+  if (cleanInput === cleanTarget) return true;
+
+  const inputDigits = cleanInput.replace(/\D/g, '');
+  const targetDigits = cleanTarget.replace(/\D/g, '');
+  if (!inputDigits || !targetDigits) return false;
+  if (inputDigits === targetDigits) return true;
+
+  // Compare standard Nigerian phone digits (last 10 digits match)
+  const inputLast10 = inputDigits.slice(-10);
+  const targetLast10 = targetDigits.slice(-10);
+  if (inputLast10.length >= 8 && targetLast10.length >= 8 && inputLast10 === targetLast10) {
+    return true;
+  }
+  return false;
+}
+
 export function verifyAccountPassword(
   user: User,
   password: string,
   allowDemoCredentials: boolean
 ): boolean {
+  // 1. Student-specific authentication:
+  if (user.role === 'STUDENT') {
+    // If student has changed their password after login, require the new password
+    if (user.hasCustomPassword === true) {
+      if (isBcryptHash(user.password)) return bcrypt.compareSync(password, user.password);
+      return password === user.password;
+    }
+
+    // Default password for student is their parent's phone number
+    if (isPhoneNumberMatch(password, user.phone)) {
+      return true;
+    }
+
+    // Allow fallback demo credential or existing hash if applicable
+    if (isBcryptHash(user.password) && bcrypt.compareSync(password, user.password)) {
+      return true;
+    }
+    if (allowDemoCredentials && (password === 'Peculiar@2026' || password === DEMO_CREDENTIALS[user.id])) {
+      return true;
+    }
+    return false;
+  }
+
+  // 2. Non-student accounts:
   const demoPassword = user.isDemo === true ? DEMO_CREDENTIALS[user.id] : undefined;
   if (demoPassword) {
     if (!allowDemoCredentials) return false;
@@ -141,7 +185,10 @@ export function canAccessStudent(user: User, student: Student): boolean {
   if (user.role === 'PARENT') {
     return (user.linkedStudentIds || []).includes(student.id) || student.parentId === user.id;
   }
-  if (user.role === 'STUDENT') return (user.linkedStudentIds || []).includes(student.id);
+  if (user.role === 'STUDENT') {
+    if (student.status === 'SUSPENDED' || student.status === 'DEACTIVATED') return false;
+    return (user.linkedStudentIds || []).includes(student.id);
+  }
   return false;
 }
 
@@ -150,7 +197,11 @@ export function canReadResult(user: User, result: AcademicResult, student: Stude
   if (['SUPER_ADMIN', 'ADMIN', 'PRINCIPAL'].includes(user.role)) return true;
   if (user.role === 'TEACHER') return teacherAssignedToStudent(user, student);
   if (!result.published) return false;
-  if (user.role === 'PARENT' || user.role === 'STUDENT') {
+  if (user.role === 'PARENT') {
+    return (user.linkedStudentIds || []).includes(result.studentId);
+  }
+  if (user.role === 'STUDENT') {
+    if (student.status === 'SUSPENDED' || student.status === 'DEACTIVATED') return false;
     return (user.linkedStudentIds || []).includes(result.studentId);
   }
   return false;

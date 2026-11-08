@@ -11,6 +11,7 @@ export type UserRole =
 export interface User {
   id: string;
   email: string;
+  admissionNo?: string;
   name: string;
   role: UserRole;
   phone?: string;
@@ -22,6 +23,7 @@ export interface User {
   isDemo?: boolean;
   tokenVersion?: number;
   mustChangePassword?: boolean;
+  hasCustomPassword?: boolean;
   createdAt: string;
 }
 
@@ -56,7 +58,7 @@ export interface Student {
   bloodGroup?: string;
   genotype?: string;
   sportsHouse: 'Purple (Faith)' | 'Orange (Grace)' | 'Blue (Peace)' | 'Red (Hope)';
-  status: 'ACTIVE' | 'GRADUATED' | 'TRANSFERRED' | 'SUSPENDED';
+  status: 'ACTIVE' | 'DEACTIVATED' | 'SUSPENDED' | 'GRADUATED' | 'TRANSFERRED';
   enrolledDate: string;
   avatarUrl?: string;
 }
@@ -206,12 +208,16 @@ export interface GalleryMedia {
     | 'Assembly'
     | 'Sports'
     | 'Classroom'
+    | 'Classrooms'
     | 'Nursery'
     | 'Primary'
     | 'Secondary'
     | 'Awards'
     | 'School Life'
-    | 'Facilities';
+    | 'Student Life'
+    | 'Facilities'
+    | 'Campus Tour'
+    | 'Science Labs';
   description: string;
   imageUrl: string;
   date: string;

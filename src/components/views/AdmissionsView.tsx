@@ -19,6 +19,7 @@ import {
 import { AdmissionApplication } from '../../types';
 import { SchoolLogo } from '../SchoolLogo';
 import { ApiClient } from '../../services/apiClient';
+import { DeviceImageUploader } from '../common/DeviceImageUploader';
 
 interface AdmissionsViewProps {
   onNavigate: (view: string) => void;
@@ -371,6 +372,7 @@ export const AdmissionsView: React.FC<AdmissionsViewProps> = ({ onNavigate, onAd
     relationship: 'Father',
     parentOccupation: '',
     parentAddress: '',
+    passportPhotoUrl: '',
   });
 
   const [submitting, setSubmitting] = useState(false);
@@ -420,6 +422,7 @@ export const AdmissionsView: React.FC<AdmissionsViewProps> = ({ onNavigate, onAd
       relationship: 'Father',
       parentOccupation: '',
       parentAddress: '',
+      passportPhotoUrl: '',
     });
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem('pcd-last-submitted-admission');
@@ -438,7 +441,7 @@ export const AdmissionsView: React.FC<AdmissionsViewProps> = ({ onNavigate, onAd
     try {
       const data = await ApiClient.submitAdmission({
         ...formData,
-        passportPhotoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
+        passportPhotoUrl: formData.passportPhotoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
       });
 
       setSubmittedApp(data.application);
@@ -961,6 +964,16 @@ export const AdmissionsView: React.FC<AdmissionsViewProps> = ({ onNavigate, onAd
                         className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-emerald-600 focus:bg-white"
                       />
                     </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-slate-100">
+                    <DeviceImageUploader
+                      label="Candidate Passport Photograph"
+                      value={formData.passportPhotoUrl || ''}
+                      onChange={(imgUrl) => setFormData((prev) => ({ ...prev, passportPhotoUrl: imgUrl }))}
+                      helpText="Upload candidate's recent passport photograph directly from your phone camera or computer files."
+                      previewHeightClass="h-36"
+                    />
                   </div>
                 </div>
 

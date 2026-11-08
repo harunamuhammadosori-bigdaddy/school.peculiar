@@ -96,6 +96,13 @@ function loadDatabase(): DatabaseState {
     };
   }
 
+  if (!state.gallery || state.gallery.length < INITIAL_GALLERY_MEDIA.length) {
+    state.gallery = INITIAL_GALLERY_MEDIA;
+  }
+  if (!state.news || state.news.length < INITIAL_NEWS.length) {
+    state.news = INITIAL_NEWS;
+  }
+
   markSeedDemoUsers(state.users, INITIAL_USERS, allowDemoCredentials);
   for (const user of state.users) {
     if (typeof user.password !== 'string' || !user.password || isBcryptHash(user.password)) continue;
@@ -164,7 +171,8 @@ async function startServer() {
   }
   const app = express();
   app.disable('x-powered-by');
-  app.use(express.json({ limit: '2mb' }));
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
   const loginRateLimit = createIpRateLimiter(15 * 60 * 1000, 10, 'Too many login attempts. Try again later.');
   const publicFormRateLimit = createIpRateLimiter(15 * 60 * 1000, 20, 'Too many requests. Try again later.');
@@ -208,21 +216,96 @@ async function startServer() {
     });
   });
 
+  // OTP Store for student password resets
+  interface PasswordResetOtp {
+    otp: string;
+    expiresAt: number;
+    userId: string;
+    studentName: string;
+    parentPhone: string;
+  }
+  const passwordResetOtps = new Map<string, PasswordResetOtp>();
+
   // 2. Authentication routes
   app.post('/api/auth/login', loginRateLimit, (req, res) => {
-    const { email, password } = req.body;
-    if (typeof email !== 'string' || typeof password !== 'string' || !email.trim() || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
+    const rawIdentifier = (req.body.identifier || req.body.email || '').trim();
+    const password = typeof req.body.password === 'string' ? req.body.password : '';
+    if (!rawIdentifier || !password) {
+      return res.status(400).json({ error: 'School email/admission number and password are required' });
     }
 
-    const normalizedEmail = email.trim().toLowerCase();
-    const user = db.users.find((u) => u.email.toLowerCase() === normalizedEmail);
+    const normalizedId = rawIdentifier.toLowerCase();
+    
+    // 1. Try finding user directly by email or admissionNo
+    let user = db.users.find(
+      (u) => u.email.toLowerCase() === normalizedId || (u.admissionNo && u.admissionNo.toLowerCase() === normalizedId)
+    );
 
-    if (!user || user.isActive === false || !verifyAccountPassword(user, password, allowDemoCredentials)) {
-      return res.status(401).json({ error: 'Invalid email or password credentials' });
+    // Check if identifier directly matches a student whose status is suspended or deactivated
+    const directStudentMatch = db.students.find(
+      (s) => s.admissionNo.toLowerCase() === normalizedId || s.id.toLowerCase() === normalizedId
+    );
+    if (directStudentMatch && (directStudentMatch.status === 'DEACTIVATED' || directStudentMatch.status === 'SUSPENDED')) {
+      return res.status(403).json({
+        error: `Your student portal account has been ${directStudentMatch.status.toLowerCase()}. Access is restricted. Please contact the school administration.`,
+      });
     }
 
-    if (!isBcryptHash(user.password)) {
+    // 2. If not found, check if identifier matches a student's admission number or ID
+    if (!user && directStudentMatch) {
+      // Find existing user linked to this student
+      user = db.users.find((u) => (u.linkedStudentIds || []).includes(directStudentMatch.id) && u.role === 'STUDENT');
+      if (!user) {
+        // Auto-provision user account for student
+        const studentEmail = `${directStudentMatch.firstName.toLowerCase()}${directStudentMatch.lastName.toLowerCase()}@peculiarschools.edu.ng`;
+        user = {
+          id: `usr-${directStudentMatch.id}`,
+          email: studentEmail,
+          admissionNo: directStudentMatch.admissionNo,
+          name: `${directStudentMatch.firstName} ${directStudentMatch.lastName}`,
+          role: 'STUDENT',
+          phone: directStudentMatch.parentPhone,
+          linkedStudentIds: [directStudentMatch.id],
+          hasCustomPassword: false,
+          isDemo: true,
+          isActive: directStudentMatch.status === 'ACTIVE',
+          createdAt: new Date().toISOString(),
+        };
+        db.users.push(user);
+        saveDatabase(db);
+      }
+    }
+
+    // Ensure student user has phone set to parentPhone from student record
+    if (user && user.role === 'STUDENT') {
+      const student = db.students.find((s) => (user?.linkedStudentIds || []).includes(s.id));
+      if (student?.parentPhone && !user.phone) {
+        user.phone = student.parentPhone;
+      }
+      if (student && (student.status === 'DEACTIVATED' || student.status === 'SUSPENDED')) {
+        return res.status(403).json({
+          error: `Your student portal account has been ${student.status.toLowerCase()}. Access is restricted. Please contact the school administration.`,
+        });
+      }
+    }
+
+    // Check account active state
+    if (user && user.isActive === false) {
+      const restrictedMessage = user.role === 'STUDENT'
+        ? 'Your student portal account has been deactivated. Access is restricted. Please contact the school administration.'
+        : 'This account has been deactivated. Access is restricted. Please contact the school administration.';
+      return res.status(403).json({ error: restrictedMessage });
+    }
+
+    if (!user || !verifyAccountPassword(user, password, allowDemoCredentials)) {
+      const errorMessage =
+        user?.role === 'STUDENT'
+          ? 'Invalid credentials. (Note: Student default password is your registered parent phone number).'
+          : 'Invalid email/admission number or password credentials';
+      return res.status(401).json({ error: errorMessage });
+    }
+
+    if (!isBcryptHash(user.password) && user.hasCustomPassword) {
       user.password = hashPassword(password);
       saveDatabase(db);
     }
@@ -236,13 +319,185 @@ async function startServer() {
       user: {
         id: user.id,
         email: user.email,
+        admissionNo: user.admissionNo,
         name: user.name,
         role: user.role,
         phone: user.phone,
         linkedStudentIds: user.linkedStudentIds,
         assignedClasses: user.assignedClasses,
+        hasCustomPassword: user.hasCustomPassword || false,
         mustChangePassword: user.mustChangePassword || false,
       },
+    });
+  });
+
+  // Request OTP for student password reset via parent phone
+  app.post('/api/auth/forgot-password/request-otp', publicFormRateLimit, (req, res) => {
+    const rawId = (req.body.identifier || req.body.email || '').trim();
+    if (!rawId) {
+      return res.status(400).json({ error: 'Please enter your school email or student admission number' });
+    }
+
+    const normalized = rawId.toLowerCase();
+
+    // Find student by admissionNo, student ID, or user email
+    let student = db.students.find(
+      (s) => s.admissionNo.toLowerCase() === normalized || s.id.toLowerCase() === normalized
+    );
+    let user = db.users.find(
+      (u) => u.email.toLowerCase() === normalized || (u.admissionNo && u.admissionNo.toLowerCase() === normalized)
+    );
+
+    if (!student && user) {
+      student = db.students.find((s) => (user?.linkedStudentIds || []).includes(s.id));
+    }
+    if (!user && student) {
+      user = db.users.find((u) => (u.linkedStudentIds || []).includes(student?.id || '') && u.role === 'STUDENT');
+    }
+
+    if (!student && !user) {
+      return res.status(404).json({ error: 'No student account found with this admission number or email.' });
+    }
+
+    if (student && (student.status === 'DEACTIVATED' || student.status === 'SUSPENDED')) {
+      return res.status(403).json({
+        error: `Student account is currently ${student.status.toLowerCase()}. Password reset is disabled. Please contact the school administration.`,
+      });
+    }
+
+    const studentName = student ? `${student.firstName} ${student.lastName}` : user?.name || 'Student';
+    const parentPhone = student?.parentPhone || user?.phone;
+
+    if (!parentPhone) {
+      return res.status(400).json({ error: 'No parent phone number registered for this student. Contact school administration.' });
+    }
+
+    // Generate 6-digit numeric OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+    passwordResetOtps.set(normalized, {
+      otp,
+      expiresAt,
+      userId: user?.id || (student ? `usr-${student.id}` : ''),
+      studentName,
+      parentPhone,
+    });
+
+    // Also index by student's admissionNo and email so verify can match either
+    if (student?.admissionNo) {
+      passwordResetOtps.set(student.admissionNo.toLowerCase(), {
+        otp,
+        expiresAt,
+        userId: user?.id || `usr-${student.id}`,
+        studentName,
+        parentPhone,
+      });
+    }
+    if (user?.email) {
+      passwordResetOtps.set(user.email.toLowerCase(), {
+        otp,
+        expiresAt,
+        userId: user.id,
+        studentName,
+        parentPhone,
+      });
+    }
+
+    // Mask phone number for security
+    const cleanPhone = parentPhone.trim();
+    const maskedPhone =
+      cleanPhone.length > 7
+        ? cleanPhone.slice(0, cleanPhone.length - 7) + ' ••• ' + cleanPhone.slice(-4)
+        : cleanPhone;
+
+    addAuditLog(user?.email || rawId, 'STUDENT', 'OTP_REQUESTED', studentName, `Password reset OTP generated for parent phone ${maskedPhone}`, req.ip);
+
+    res.json({
+      success: true,
+      studentName,
+      maskedPhone,
+      parentPhone,
+      demoOtp: otp,
+      message: `A 6-digit verification code has been dispatched to parent phone (${maskedPhone}).`,
+    });
+  });
+
+  // Verify OTP and set new password
+  app.post('/api/auth/forgot-password/verify-otp', publicFormRateLimit, (req, res) => {
+    const rawId = (req.body.identifier || req.body.email || '').trim();
+    const otp = (req.body.otp || '').trim();
+    const newPassword = typeof req.body.newPassword === 'string' ? req.body.newPassword.trim() : '';
+
+    if (!rawId || !otp || !newPassword) {
+      return res.status(400).json({ error: 'Admission number/email, OTP code, and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters long' });
+    }
+
+    const normalized = rawId.toLowerCase();
+    const record = passwordResetOtps.get(normalized);
+
+    if (!record) {
+      return res.status(400).json({ error: 'No active OTP request found for this student. Please request a new code.' });
+    }
+
+    if (Date.now() > record.expiresAt) {
+      passwordResetOtps.delete(normalized);
+      return res.status(400).json({ error: 'OTP code has expired (valid for 10 minutes). Please request a new code.' });
+    }
+
+    if (record.otp !== otp) {
+      return res.status(400).json({ error: 'Incorrect OTP code. Please enter the 6-digit code sent to parent phone.' });
+    }
+
+    // Find student and user
+    let user = db.users.find(
+      (u) => u.id === record.userId || u.email.toLowerCase() === normalized || (u.admissionNo && u.admissionNo.toLowerCase() === normalized)
+    );
+
+    if (!user) {
+      const student = db.students.find(
+        (s) => s.admissionNo.toLowerCase() === normalized || s.id.toLowerCase() === normalized
+      );
+      if (student) {
+        user = {
+          id: `usr-${student.id}`,
+          email: `${student.firstName.toLowerCase()}${student.lastName.toLowerCase()}@peculiarschools.edu.ng`,
+          admissionNo: student.admissionNo,
+          name: `${student.firstName} ${student.lastName}`,
+          role: 'STUDENT',
+          phone: student.parentPhone,
+          linkedStudentIds: [student.id],
+          isDemo: true,
+          hasCustomPassword: true,
+          createdAt: new Date().toISOString(),
+        };
+        db.users.push(user);
+      }
+    }
+
+    if (!user) {
+      return res.status(404).json({ error: 'Student user account not found.' });
+    }
+
+    // Update password
+    user.password = hashPassword(newPassword);
+    user.hasCustomPassword = true;
+    user.mustChangePassword = false;
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
+    saveDatabase(db);
+
+    // Clean up used OTP
+    passwordResetOtps.delete(normalized);
+
+    addAuditLog(user.email, user.role, 'PASSWORD_RESET_SUCCESS', user.name, 'Password successfully reset via parent phone OTP', req.ip);
+
+    res.json({
+      success: true,
+      message: 'Password successfully updated! You can now sign in using your new password.',
     });
   });
 
@@ -261,10 +516,12 @@ async function startServer() {
     if (!verifyAccountPassword(user, currentPassword, allowDemoCredentials)) {
       return res.status(401).json({ error: 'Current password is incorrect' });
     }
-    if (newPassword.length < 12 || newPassword === currentPassword || ['@Admin2005', 'Peculiar@2026', 'admin123'].includes(newPassword)) {
-      return res.status(400).json({ error: 'Choose a different password with at least 12 characters' });
+    const minLength = user.role === 'STUDENT' ? 6 : 8;
+    if (newPassword.length < minLength || newPassword === currentPassword) {
+      return res.status(400).json({ error: `Choose a different password with at least ${minLength} characters` });
     }
     user.password = hashPassword(newPassword);
+    user.hasCustomPassword = true;
     user.mustChangePassword = false;
     user.tokenVersion = (user.tokenVersion || 0) + 1;
     saveDatabase(db);
@@ -609,6 +866,91 @@ async function startServer() {
     res.status(201).json({ student: newStudent, studentPortal: { email: generatedEmail, temporaryPassword } });
   });
 
+  // 4b. Update Student Status (Active, Deactivated, Suspended)
+  app.patch('/api/students/:id/status', (req, res) => {
+    const user = requireRole(req, res, ['ADMIN', 'SUPER_ADMIN', 'PRINCIPAL']);
+    if (!user) return;
+
+    const { id } = req.params;
+    const { status } = req.body;
+    const allowedStatuses: Student['status'][] = ['ACTIVE', 'DEACTIVATED', 'SUSPENDED', 'GRADUATED', 'TRANSFERRED'];
+
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ error: 'Invalid student status provided. Must be ACTIVE, DEACTIVATED, or SUSPENDED.' });
+    }
+
+    const student = db.students.find((s) => s.id === id);
+    if (!student) {
+      return res.status(404).json({ error: 'Student record not found.' });
+    }
+
+    const previousStatus = student.status;
+    student.status = status;
+
+    // Immediately toggle active access on all student portal accounts associated with this student
+    const studentUsers = db.users.filter((u) => u.role === 'STUDENT' && (u.linkedStudentIds || []).includes(student.id));
+    studentUsers.forEach((stuUser) => {
+      // If student is DEACTIVATED or SUSPENDED, set isActive to false and bump tokenVersion to revoke active JWTs
+      stuUser.isActive = (status === 'ACTIVE');
+      stuUser.tokenVersion = (stuUser.tokenVersion || 0) + 1;
+    });
+
+    saveDatabase(db);
+    addAuditLog(
+      user.email,
+      user.role,
+      'STUDENT_STATUS_UPDATED',
+      student.admissionNo,
+      `Changed student status from ${previousStatus} to ${status} for ${student.firstName} ${student.lastName}`
+    );
+
+    res.json({ success: true, student, message: `Student status updated to ${status}.` });
+  });
+
+  // 4c. Edit Student Details
+  app.patch('/api/students/:id', (req, res) => {
+    const user = requireRole(req, res, ['ADMIN', 'SUPER_ADMIN', 'PRINCIPAL']);
+    if (!user) return;
+
+    const { id } = req.params;
+    const student = db.students.find((s) => s.id === id);
+    if (!student) {
+      return res.status(404).json({ error: 'Student not found.' });
+    }
+
+    const data = req.body;
+    const clean = (val: unknown) => typeof val === 'string' ? val.trim() : '';
+
+    if (data.firstName) student.firstName = clean(data.firstName);
+    if (data.lastName) student.lastName = clean(data.lastName);
+    if (data.parentName) student.parentName = clean(data.parentName);
+    if (data.parentPhone) student.parentPhone = clean(data.parentPhone);
+    if (data.address) student.address = clean(data.address);
+    if (data.sportsHouse) student.sportsHouse = data.sportsHouse;
+    if (data.gender === 'Male' || data.gender === 'Female') student.gender = data.gender;
+    if (data.classId) {
+      const cls = INITIAL_CLASSES.find((c) => c.id === data.classId);
+      if (cls) {
+        student.classId = cls.id;
+        student.className = cls.name;
+        student.arm = cls.arm;
+      }
+    }
+    if (data.status && ['ACTIVE', 'DEACTIVATED', 'SUSPENDED', 'GRADUATED', 'TRANSFERRED'].includes(data.status)) {
+      student.status = data.status;
+      const studentUsers = db.users.filter((u) => u.role === 'STUDENT' && (u.linkedStudentIds || []).includes(student.id));
+      studentUsers.forEach((stuUser) => {
+        stuUser.isActive = (student.status === 'ACTIVE');
+        stuUser.tokenVersion = (stuUser.tokenVersion || 0) + 1;
+      });
+    }
+
+    saveDatabase(db);
+    addAuditLog(user.email, user.role, 'STUDENT_UPDATED', student.admissionNo, `Updated record for ${student.firstName} ${student.lastName}`);
+
+    res.json({ success: true, student });
+  });
+
   // 5. Academic Results API
   app.get('/api/results', (req, res) => {
     const user = requireRole(req, res, ['SUPER_ADMIN', 'ADMIN', 'PRINCIPAL', 'TEACHER', 'PARENT', 'STUDENT']);
@@ -744,15 +1086,66 @@ async function startServer() {
   });
 
   app.post('/api/fees/record-payment', (req, res) => {
-    const user = requireRole(req, res, ['ACCOUNTANT', 'ADMIN', 'SUPER_ADMIN']);
+    const user = requireRole(req, res, ['ACCOUNTANT', 'ADMIN', 'SUPER_ADMIN', 'PRINCIPAL']);
     if (!user) return;
 
-    const { feeLedgerId, studentId, amount, paymentMethod, reference, paymentDate } = req.body;
-    const ledger = feeLedgerId
+    const { feeLedgerId, studentId, admissionNo, term, session, amount, paymentMethod, reference, paymentDate } = req.body;
+    const targetTerm = String(term || 'First Term 2026/2027').trim();
+    const targetSession = String(session || '2026/2027').trim();
+
+    let ledger = feeLedgerId
       ? db.fees.find((fee) => fee.id === String(feeLedgerId))
-      : db.fees.find((fee) => fee.studentId === studentId);
+      : db.fees.find(
+          (fee) =>
+            (fee.studentId === studentId ||
+              (admissionNo && String(fee.admissionNo).toLowerCase() === String(admissionNo).toLowerCase())) &&
+            fee.term === targetTerm
+        );
+
+    // If not found for target term, but studentId is provided, check if ledger exists for any term
+    if (!ledger && studentId) {
+      ledger = db.fees.find((fee) => fee.studentId === studentId && fee.term === targetTerm);
+    }
+
+    // If student has no fee obligation yet for this term, automatically create it!
     if (!ledger) {
-      return res.status(404).json({ error: 'Student fee record not found' });
+      const student = db.students.find(
+        (s) =>
+          s.id === studentId ||
+          (admissionNo && s.admissionNo.toLowerCase() === String(admissionNo).toLowerCase())
+      );
+      if (!student) {
+        return res.status(404).json({ error: 'Active student record not found' });
+      }
+
+      const arm = student.arm || 'SECONDARY';
+      const tuitionFee = arm === 'NURSERY' ? 35000 : arm === 'PRIMARY' ? 42000 : 55000;
+      const developmentLevy = arm === 'NURSERY' ? 4500 : arm === 'PRIMARY' ? 6000 : 8500;
+      const sportsLevy = arm === 'SECONDARY' ? 6500 : 3500;
+      const examinationFee = 5000;
+      const uniformFee = 0;
+      const totalPayable = tuitionFee + developmentLevy + sportsLevy + examinationFee + uniformFee;
+
+      ledger = {
+        id: `fee-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        studentId: student.id,
+        studentName: `${student.firstName} ${student.lastName}`,
+        admissionNo: student.admissionNo,
+        className: student.className,
+        term: targetTerm,
+        session: targetSession,
+        tuitionFee,
+        developmentLevy,
+        sportsLevy,
+        examinationFee,
+        uniformFee,
+        totalPayable,
+        totalPaid: 0,
+        balanceDue: totalPayable,
+        status: 'UNPAID',
+        payments: [],
+      };
+      db.fees.unshift(ledger);
     }
 
     const amountPaid = Number(amount);
@@ -760,12 +1153,12 @@ async function startServer() {
       return res.status(400).json({ error: 'Invalid payment amount' });
     }
 
-    const allowedMethods = ['Bank Transfer', 'Cash (Bursary)', 'POS'];
+    const allowedMethods = ['Bank Transfer', 'Cash (Bursary)', 'POS', 'Online Transfer'];
     if (!allowedMethods.includes(paymentMethod)) {
-      return res.status(400).json({ error: 'Select a valid offline payment method' });
+      return res.status(400).json({ error: 'Select a valid payment method (Bank Transfer, Cash (Bursary), POS, or Online Transfer)' });
     }
 
-    const transactionReference = String(reference || '').trim().toUpperCase();
+    const transactionReference = String(reference || `PCD-TXN-${Date.now().toString().slice(-6)}`).trim().toUpperCase();
     if (transactionReference.length < 3 || transactionReference.length > 80) {
       return res.status(400).json({ error: 'A payment reference of 3 to 80 characters is required' });
     }
@@ -785,7 +1178,7 @@ async function startServer() {
     const currentTotalPaid = Math.max(Number(ledger.totalPaid) || 0, historicalPaymentTotal);
     const balanceDue = Math.max(0, Number(ledger.totalPayable) - currentTotalPaid);
     if (amountPaid > balanceDue) {
-      return res.status(400).json({ error: 'Payment exceeds the outstanding balance' });
+      return res.status(400).json({ error: `Payment exceeds outstanding balance of N${balanceDue.toLocaleString()}` });
     }
 
     const receiptYear = new Date().getFullYear();
@@ -808,7 +1201,7 @@ async function startServer() {
       className: ledger.className,
       amountPaid,
       paymentDate: paymentDateValue,
-      paymentMethod,
+      paymentMethod: paymentMethod as any,
       transactionReference,
       term: ledger.term,
       session: ledger.session,

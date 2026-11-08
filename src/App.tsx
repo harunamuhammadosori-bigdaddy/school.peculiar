@@ -61,6 +61,7 @@ export default function App() {
   const [activeReceipt, setActiveReceipt] = useState<FeePayment | null>(null);
   const [selectedGalleryMedia, setSelectedGalleryMedia] = useState<GalleryMedia | null>(null);
   const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false);
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
 
   // Application Data States
   const [students, setStudents] = useState<Student[]>(() => ApiClient.getStudents());
@@ -117,14 +118,14 @@ export default function App() {
       setNews(ApiClient.getNews());
       setGallery(ApiClient.getGallery());
 
-      // News
-      fetch('/api/news')
+      // News & Gallery with optional auth header for admin full-visibility
+      const authHeaderOpt = authToken ? { Authorization: `Bearer ${authToken}` } : undefined;
+      fetch('/api/news', authHeaderOpt ? { headers: authHeaderOpt } : undefined)
         .then((res) => (res.ok && res.headers.get('content-type')?.includes('application/json') ? res.json() : null))
         .then((data) => data && setNews(data.news || (Array.isArray(data) ? data : [])))
         .catch(() => {});
 
-      // Gallery
-      fetch('/api/gallery')
+      fetch('/api/gallery', authHeaderOpt ? { headers: authHeaderOpt } : undefined)
         .then((res) => (res.ok && res.headers.get('content-type')?.includes('application/json') ? res.json() : null))
         .then((data) => data && setGallery(data.gallery || (Array.isArray(data) ? data : [])))
         .catch(() => {});
@@ -287,6 +288,7 @@ export default function App() {
                 students={students}
                 results={results}
                 onOpenReportCard={setActiveReportCard}
+                onChangePassword={() => setIsChangePasswordModalOpen(true)}
               />
             ) : currentUser.role === 'APPLICANT' ? (
               <ApplicantPortal
@@ -331,8 +333,20 @@ export default function App() {
         onLoginSuccess={handleLoginSuccess}
       />
 
-      {currentUser?.mustChangePassword && authToken && (
-        <ChangePasswordModal token={authToken} onComplete={handleLogout} />
+      {(currentUser?.mustChangePassword || isChangePasswordModalOpen) && authToken && (
+        <ChangePasswordModal
+          token={authToken}
+          isVoluntary={!currentUser?.mustChangePassword}
+          onClose={() => setIsChangePasswordModalOpen(false)}
+          onComplete={() => {
+            setIsChangePasswordModalOpen(false);
+            if (currentUser) {
+              const updated = { ...currentUser, mustChangePassword: false, hasCustomPassword: true };
+              setCurrentUser(updated);
+              localStorage.setItem('pcd_user', JSON.stringify(updated));
+            }
+          }}
+        />
       )}
 
       {/* 2. Official Terminal Report Card Modal */}

@@ -1,6 +1,6 @@
 import React from 'react';
 import { User, Student, AcademicResult } from '../../types';
-import { Download, Printer, User as UserIcon } from 'lucide-react';
+import { Download, Printer, User as UserIcon, Lock, ShieldCheck, KeyRound, Phone } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 
 interface StudentPortalProps {
@@ -8,6 +8,7 @@ interface StudentPortalProps {
   students: Student[];
   results: AcademicResult[];
   onOpenReportCard: (result: AcademicResult) => void;
+  onChangePassword?: () => void;
 }
 
 const buildStudentResultPdf = (student: Student, result: AcademicResult) => {
@@ -86,6 +87,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
   students = [],
   results = [],
   onOpenReportCard,
+  onChangePassword,
 }) => {
   const linkedStudentIds = Array.isArray(user.linkedStudentIds) ? user.linkedStudentIds : [];
   const permittedStudents = students.filter((student) => linkedStudentIds.includes(student.id));
@@ -130,24 +132,80 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
   }
 
   return (
-    <div className="space-y-8 pb-16">
+    <div className="space-y-6 pb-16">
       <div className="bg-gradient-to-r from-blue-900 to-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-sm">
-        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-amber-400 text-slate-950 flex items-center justify-center font-black text-xl shadow-md">
-            {currentStudent.firstName[0]}
-            {currentStudent.lastName[0]}
+        <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between gap-4">
+          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
+            <div className="w-16 h-16 rounded-2xl bg-amber-400 text-slate-950 flex items-center justify-center font-black text-xl shadow-md">
+              {currentStudent.firstName[0]}
+              {currentStudent.lastName[0]}
+            </div>
+            <div>
+              <span className="text-xs font-bold text-amber-300 uppercase tracking-widest block mb-0.5">
+                Peculiar Student Portal
+              </span>
+              <h1 className="text-2xl font-extrabold text-white">
+                {currentStudent.firstName} {currentStudent.lastName}
+              </h1>
+              <p className="text-xs text-blue-200 mt-0.5">
+                Admission No: <span className="font-mono text-white font-bold">{currentStudent.admissionNo}</span> • Class: {currentStudent.className} • Sports House: {currentStudent.sportsHouse}
+              </p>
+            </div>
           </div>
-          <div>
-            <span className="text-xs font-bold text-amber-300 uppercase tracking-widest block mb-0.5">
-              Peculiar Student Portal
-            </span>
-            <h1 className="text-2xl font-extrabold text-white">
-              {currentStudent.firstName} {currentStudent.lastName}
-            </h1>
-            <p className="text-xs text-blue-200 mt-0.5">
-              Admission No: <span className="font-mono text-white">{currentStudent.admissionNo}</span> • Class: {currentStudent.className} • Sports House: {currentStudent.sportsHouse}
-            </p>
+          {onChangePassword && (
+            <button
+              onClick={onChangePassword}
+              className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-xl flex items-center gap-2 border border-white/20 transition-colors shrink-0"
+              title="Change your login password"
+            >
+              <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+              <span>Change Password</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Student Security & Credentials Strip */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Portal Credentials Info</span>
+            {user.hasCustomPassword ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                <ShieldCheck className="w-3 h-3 text-emerald-700" />
+                Custom Password Active
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-900 border border-amber-200">
+                <KeyRound className="w-3 h-3 text-amber-800" />
+                Default Password Active
+              </span>
+            )}
           </div>
+          <p className="text-xs text-slate-600">
+            Sign-in ID: <span className="font-mono font-semibold text-slate-900">{currentStudent.admissionNo}</span> (or school email).
+            {user.hasCustomPassword ? (
+              <span className="ml-1 text-slate-500">Your personal custom password is in effect.</span>
+            ) : (
+              <span className="ml-1 text-slate-600">
+                Default password: <span className="font-semibold text-slate-900">Parent Phone ({currentStudent.parentPhone})</span>.
+              </span>
+            )}
+          </p>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
+            <Phone className="w-3.5 h-3.5 text-emerald-700" />
+            <span>Parent Contact: <strong className="text-slate-800">{currentStudent.parentPhone}</strong></span>
+          </div>
+          {onChangePassword && (
+            <button
+              onClick={onChangePassword}
+              className="text-xs font-bold text-emerald-800 hover:text-emerald-700 underline underline-offset-4"
+            >
+              Update Password
+            </button>
+          )}
         </div>
       </div>
 

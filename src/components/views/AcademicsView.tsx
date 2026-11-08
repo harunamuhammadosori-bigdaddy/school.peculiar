@@ -10,6 +10,7 @@ import {
   ArrowRight,
   Sparkles,
   Trophy,
+  Building2,
 } from 'lucide-react';
 
 interface AcademicsViewProps {
@@ -132,16 +133,16 @@ export const AcademicsView: React.FC<AcademicsViewProps> = ({ onNavigate }) => {
               </div>
 
               <div className="lg:col-span-5">
-                <div className="rounded-2xl overflow-hidden shadow-md border border-slate-200">
+                <div className="rounded-2xl overflow-hidden shadow-md border border-slate-200 bg-slate-900">
                   <img
-                    src="https://images.unsplash.com/photo-1509062522246-3755977927d7?auto=format&fit=crop&w=800&q=80"
-                    alt="Peculiar Nursery Pupils"
+                    src="/school-media/classroom-trees-compound.jpg"
+                    alt="Peculiar Nursery & Early Learning Compound"
                     className="w-full h-80 object-cover"
                   />
                   <div className="p-4 bg-slate-900 text-white text-xs">
-                    <span className="text-amber-400 font-bold">Nursery Atmosphere</span>
+                    <span className="text-amber-400 font-bold">Nursery Grounds & Shaded Courtyard</span>
                     <p className="text-slate-400 mt-0.5">
-                      Safe indoor classrooms and open outdoor courtyard under shade.
+                      Safe, tree-shaded outdoor compound and ventilated classrooms designed for early years discovery.
                     </p>
                   </div>
                 </div>
@@ -215,16 +216,16 @@ export const AcademicsView: React.FC<AcademicsViewProps> = ({ onNavigate }) => {
               </div>
 
               <div className="lg:col-span-5">
-                <div className="rounded-2xl overflow-hidden shadow-md border border-slate-200">
+                <div className="rounded-2xl overflow-hidden shadow-md border border-slate-200 bg-slate-900">
                   <img
-                    src="https://images.unsplash.com/photo-1580582932707-520aed937b7b?auto=format&fit=crop&w=800&q=80"
-                    alt="Peculiar Primary Classroom"
+                    src="/school-media/students-outdoor-gathering.jpg"
+                    alt="Peculiar Primary School Pupils"
                     className="w-full h-80 object-cover"
                   />
                   <div className="p-4 bg-slate-900 text-white text-xs">
-                    <span className="text-emerald-400 font-bold">Primary Classroom Focus</span>
+                    <span className="text-emerald-400 font-bold">Attentive Primary Pupils</span>
                     <p className="text-slate-400 mt-0.5">
-                      Small class cohorts ensuring no pupil is left behind.
+                      Orderly students gathered on the school compound in full uniform with strong pastoral discipline.
                     </p>
                   </div>
                 </div>
@@ -302,16 +303,16 @@ export const AcademicsView: React.FC<AcademicsViewProps> = ({ onNavigate }) => {
               </div>
 
               <div className="lg:col-span-5">
-                <div className="rounded-2xl overflow-hidden shadow-md border border-slate-200">
+                <div className="rounded-2xl overflow-hidden shadow-md border border-slate-200 bg-slate-900">
                   <img
-                    src="https://images.unsplash.com/photo-1427504494785-3a9ca7044f45?auto=format&fit=crop&w=800&q=80"
-                    alt="Secondary Students in Class"
+                    src="/school-media/sss1-class-session.jpg"
+                    alt="Secondary Students in Class Session"
                     className="w-full h-80 object-cover"
                   />
                   <div className="p-4 bg-slate-900 text-white text-xs">
-                    <span className="text-blue-400 font-bold">Academic Focus & Outdoor Study</span>
+                    <span className="text-blue-400 font-bold">Senior Class in Active Session</span>
                     <p className="text-slate-400 mt-0.5">
-                      Disciplined study halls and outdoor revision under natural shade.
+                      Focused learning environment preparing students for WAEC, NECO, and UTME/JAMB exams.
                     </p>
                   </div>
                 </div>
@@ -404,6 +405,115 @@ export const AcademicsView: React.FC<AcademicsViewProps> = ({ onNavigate }) => {
         </div>
       </section>
 
+      {/* Modern Science Laboratories & Examination Facilities */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="bg-slate-900 text-white rounded-3xl p-8 sm:p-12 border border-slate-800">
+          <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-6 mb-10">
+            <div>
+              <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-amber-300 bg-emerald-950 px-3 py-1 rounded-full border border-emerald-700/60">
+                <Beaker className="w-3.5 h-3.5" />
+                <span>Hands-On Practical Science</span>
+              </span>
+              <h3 className="text-2xl sm:text-4xl font-extrabold text-white mt-3 tracking-tight">
+                Equipped Science Laboratories & Examination Halls
+              </h3>
+              <p className="text-slate-300 text-sm sm:text-base mt-2 max-w-2xl leading-relaxed">
+                Peculiar College provides fully accredited science and technical laboratories equipped for WAEC, NECO, and BECE practical examinations.
+              </p>
+            </div>
+            <button
+              onClick={() => onNavigate('gallery')}
+              className="px-6 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs sm:text-sm transition-all flex items-center gap-2 shrink-0"
+            >
+              <span>View All Lab Photos</span>
+              <ArrowRight className="w-4 h-4 text-slate-950" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Lab 1: Chemistry */}
+            <div className="bg-slate-950/80 rounded-2xl overflow-hidden border border-slate-800 flex flex-col justify-between">
+              <div className="relative h-44 overflow-hidden">
+                <img
+                  src="/school-media/chemistry-lab-glassware.jpg"
+                  alt="Chemistry Laboratory Equipment"
+                  className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+                />
+                <span className="absolute top-2.5 left-2.5 bg-slate-900/90 text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded">
+                  Chemistry Lab
+                </span>
+              </div>
+              <div className="p-4">
+                <h4 className="font-bold text-white text-sm">Glassware & Analytical Reagents</h4>
+                <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                  Volumetric flasks, burettes, pipettes, and standard acids/bases for qualitative and quantitative titration.
+                </p>
+              </div>
+            </div>
+
+            {/* Lab 2: Biology */}
+            <div className="bg-slate-950/80 rounded-2xl overflow-hidden border border-slate-800 flex flex-col justify-between">
+              <div className="relative h-44 overflow-hidden">
+                <img
+                  src="/school-media/biology-lab-microscopes.jpg"
+                  alt="Biology Microscopes & Specimens"
+                  className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+                />
+                <span className="absolute top-2.5 left-2.5 bg-slate-900/90 text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded">
+                  Biology Lab
+                </span>
+              </div>
+              <div className="p-4">
+                <h4 className="font-bold text-white text-sm">Monocular Microscopes & Slides</h4>
+                <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                  Optical microscopes, dissection kits, biological preserved specimens, and anatomical study models.
+                </p>
+              </div>
+            </div>
+
+            {/* Lab 3: Physics */}
+            <div className="bg-slate-950/80 rounded-2xl overflow-hidden border border-slate-800 flex flex-col justify-between">
+              <div className="relative h-44 overflow-hidden">
+                <img
+                  src="/school-media/physics-lab-circuit-components.jpg"
+                  alt="Physics Lab Circuit Apparatus"
+                  className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+                />
+                <span className="absolute top-2.5 left-2.5 bg-slate-900/90 text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded">
+                  Physics Lab
+                </span>
+              </div>
+              <div className="p-4">
+                <h4 className="font-bold text-white text-sm">Circuits, Optics & Mechanics</h4>
+                <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                  Resistance boxes, rheostats, galvanometers, optical benches, and prisms for SSCE practical physics experiments.
+                </p>
+              </div>
+            </div>
+
+            {/* Lab 4: Examination Hall */}
+            <div className="bg-slate-950/80 rounded-2xl overflow-hidden border border-slate-800 flex flex-col justify-between">
+              <div className="relative h-44 overflow-hidden">
+                <img
+                  src="/school-media/examination-hall-interior.jpg"
+                  alt="Examination Hall Interior"
+                  className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+                />
+                <span className="absolute top-2.5 left-2.5 bg-slate-900/90 text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded">
+                  Exam Hall
+                </span>
+              </div>
+              <div className="p-4">
+                <h4 className="font-bold text-white text-sm">Spacious Examination Hall</h4>
+                <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                  Ventilated, standardized examination setting designed to accommodate external invigilators and multiple cohorts.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Sports Houses & Co-Curriculars */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-3xl mx-auto mb-10">
@@ -449,6 +559,27 @@ export const AcademicsView: React.FC<AcademicsViewProps> = ({ onNavigate }) => {
             <p className="text-xs text-red-900 leading-relaxed">
               Motto: "Reaching the Summit". Excellent in sprints, march past, and academic decathlon.
             </p>
+          </div>
+        </div>
+
+        <div className="mt-8 rounded-2xl overflow-hidden border border-slate-200 shadow-sm relative bg-slate-900">
+          <img
+            src="/sport.jpg"
+            alt="Peculiar College Doma Inter-House Sports Volleyball Championship"
+            className="w-full h-72 sm:h-96 object-cover object-center"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex items-end p-6">
+            <div className="text-white max-w-2xl">
+              <span className="bg-amber-400 text-slate-950 text-xs font-bold px-2.5 py-1 rounded-md uppercase tracking-wider">
+                Annual Inter-House Sports Championship
+              </span>
+              <h4 className="text-xl sm:text-2xl font-extrabold text-white mt-2">
+                Peculiar College Athletes in Action
+              </h4>
+              <p className="text-xs sm:text-sm text-slate-200 mt-1">
+                Pupils and students competing in the volleyball championship during our annual Inter-House Sports tournament on the school grounds.
+              </p>
+            </div>
           </div>
         </div>
       </section>

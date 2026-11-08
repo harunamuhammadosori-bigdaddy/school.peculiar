@@ -14,8 +14,13 @@ import {
   Phone,
   Clock,
   HeartHandshake,
+  Building2,
+  Beaker,
+  Sun,
+  Eye,
 } from 'lucide-react';
 import { GalleryMedia, NewsArticle } from '../../types';
+import { INITIAL_GALLERY_MEDIA } from '../../data/mediaData';
 
 interface HomeViewProps {
   onNavigate: (view: string) => void;
@@ -171,10 +176,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Nursery */}
           <div className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col group">
-            <div className="relative h-56 overflow-hidden bg-slate-100">
+            <div className="relative h-56 overflow-hidden bg-slate-900">
               <img
-                src="https://images.unsplash.com/photo-1509062522246-3755977927d7?auto=format&fit=crop&w=800&q=80"
-                alt="Nursery Arm at Peculiar College"
+                src="/school-media/classroom-trees-compound.jpg"
+                alt="Nursery & Early Years Grounds at Peculiar College Doma"
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               />
               <span className="absolute top-4 left-4 bg-amber-400 text-slate-950 font-extrabold text-xs px-3 py-1 rounded-full shadow-sm">
@@ -188,7 +193,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 </span>
                 <h3 className="text-xl font-bold text-slate-900 mt-1 mb-2">Nursery Arm</h3>
                 <p className="text-sm text-slate-600 leading-relaxed mb-4">
-                  Playful, hands-on learning that builds early literacy, phonics, numeracy, and good moral habits in our cheerful yellow & green uniform.
+                  Playful, hands-on learning that builds early literacy, phonics, numeracy, and good moral habits in a secure and shaded environment.
                 </p>
               </div>
               <button
@@ -203,10 +208,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
           {/* Primary */}
           <div className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col group">
-            <div className="relative h-56 overflow-hidden bg-slate-100">
+            <div className="relative h-56 overflow-hidden bg-slate-900">
               <img
-                src="https://images.unsplash.com/photo-1580582932707-520aed937b7b?auto=format&fit=crop&w=800&q=80"
-                alt="Primary Arm at Peculiar College"
+                src="/school-media/students-outdoor-gathering.jpg"
+                alt="Primary Arm Pupils at Peculiar College Doma"
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               />
               <span className="absolute top-4 left-4 bg-emerald-700 text-white font-extrabold text-xs px-3 py-1 rounded-full shadow-sm">
@@ -220,7 +225,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 </span>
                 <h3 className="text-xl font-bold text-slate-900 mt-1 mb-2">Primary Arm</h3>
                 <p className="text-sm text-slate-600 leading-relaxed mb-4">
-                  Structured national curriculum with strong pastoral care, developing every pupil's quantitative abilities, curiosity, and disciplined reading habits.
+                  Structured national curriculum with strong pastoral care, developing every pupil's quantitative abilities, curiosity, and disciplined habits.
                 </p>
               </div>
               <button
@@ -235,10 +240,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
           {/* Secondary */}
           <div className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col group">
-            <div className="relative h-56 overflow-hidden bg-slate-100">
+            <div className="relative h-56 overflow-hidden bg-slate-900">
               <img
-                src="/assembly.jpg"
-                alt="Secondary Arm at Peculiar College"
+                src="/school-media/senior-secondary-block.jpg"
+                alt="Senior Secondary Block at Peculiar College Doma"
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               />
               <span className="absolute top-4 left-4 bg-blue-700 text-white font-extrabold text-xs px-3 py-1 rounded-full shadow-sm">
@@ -252,7 +257,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 </span>
                 <h3 className="text-xl font-bold text-slate-900 mt-1 mb-2">Secondary Arm</h3>
                 <p className="text-sm text-slate-600 leading-relaxed mb-4">
-                  Rigorous academics and mentorship preparing students for BECE, WAEC, NECO, and JAMB in Science, Arts, and Commercial departments.
+                  Rigorous academics and practical lab training preparing students for BECE, WAEC, NECO, and JAMB in Science, Arts, and Commercial departments.
                 </p>
               </div>
               <button
@@ -267,6 +272,159 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </div>
       </section>
 
+      {/* CAMPUS TOUR & FACILITIES SHOWCASE */}
+      <section className="bg-emerald-950 text-white py-16 sm:py-20 border-y border-emerald-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-6 mb-12">
+            <div>
+              <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-amber-300 bg-emerald-900/80 px-3 py-1 rounded-full border border-emerald-700/60">
+                <Building2 className="w-3.5 h-3.5" />
+                <span>Physical Infrastructure</span>
+              </span>
+              <h2 className="text-3xl sm:text-4xl font-extrabold text-white mt-3 tracking-tight">
+                Campus Tour & Academic Facilities
+              </h2>
+              <p className="text-emerald-200/80 text-sm sm:text-base mt-2 max-w-2xl leading-relaxed">
+                Take a virtual tour through our purpose-built campus in Doma: equipped science laboratories, spacious examination hall, dedicated classroom blocks, and 24/7 solar power facility.
+              </p>
+            </div>
+            <button
+              onClick={() => onNavigate('gallery')}
+              className="px-6 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-sm transition-all flex items-center gap-2 shrink-0 shadow-lg"
+            >
+              <span>Explore All 30+ Facilities Photos</span>
+              <ArrowRight className="w-4 h-4 text-slate-950" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Facility 1: Science Labs */}
+            <div
+              onClick={() => onNavigate('gallery')}
+              className="group bg-slate-900/80 rounded-2xl overflow-hidden border border-emerald-800/50 hover:border-amber-400/60 transition-all cursor-pointer shadow-lg flex flex-col justify-between"
+            >
+              <div className="relative h-48 overflow-hidden">
+                <img
+                  src="/school-media/chemistry-lab-glassware.jpg"
+                  alt="Chemistry & Science Laboratories"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                />
+                <span className="absolute top-3 left-3 bg-emerald-950/80 backdrop-blur-xs text-amber-300 text-[10px] font-bold px-2.5 py-1 rounded">
+                  Science Labs
+                </span>
+              </div>
+              <div className="p-5 flex-1 flex flex-col justify-between">
+                <div>
+                  <h3 className="font-bold text-white text-base group-hover:text-amber-300 transition-colors">
+                    Equipped Science Laboratories
+                  </h3>
+                  <p className="text-xs text-slate-300 mt-2 leading-relaxed">
+                    Full practical apparatus for WAEC/NECO in Chemistry, Physics, Biology, and Agricultural Science.
+                  </p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-emerald-900/60 flex items-center text-xs font-semibold text-amber-400 gap-1">
+                  <span>View Lab Photos</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </div>
+              </div>
+            </div>
+
+            {/* Facility 2: Examination Hall */}
+            <div
+              onClick={() => onNavigate('gallery')}
+              className="group bg-slate-900/80 rounded-2xl overflow-hidden border border-emerald-800/50 hover:border-amber-400/60 transition-all cursor-pointer shadow-lg flex flex-col justify-between"
+            >
+              <div className="relative h-48 overflow-hidden">
+                <img
+                  src="/school-media/exam-hall-exterior.jpg"
+                  alt="Purpose-Built Examination Hall"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                />
+                <span className="absolute top-3 left-3 bg-emerald-950/80 backdrop-blur-xs text-amber-300 text-[10px] font-bold px-2.5 py-1 rounded">
+                  Academic Hall
+                </span>
+              </div>
+              <div className="p-5 flex-1 flex flex-col justify-between">
+                <div>
+                  <h3 className="font-bold text-white text-base group-hover:text-amber-300 transition-colors">
+                    Grand Examination Hall
+                  </h3>
+                  <p className="text-xs text-slate-300 mt-2 leading-relaxed">
+                    Spacious, well-ventilated hall built to national accreditation standards for internal and external examinations.
+                  </p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-emerald-900/60 flex items-center text-xs font-semibold text-amber-400 gap-1">
+                  <span>View Hall Photos</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </div>
+              </div>
+            </div>
+
+            {/* Facility 3: Classroom Blocks */}
+            <div
+              onClick={() => onNavigate('gallery')}
+              className="group bg-slate-900/80 rounded-2xl overflow-hidden border border-emerald-800/50 hover:border-amber-400/60 transition-all cursor-pointer shadow-lg flex flex-col justify-between"
+            >
+              <div className="relative h-48 overflow-hidden">
+                <img
+                  src="/school-media/sss1-class-session.jpg"
+                  alt="Disciplined Classrooms in Session"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                />
+                <span className="absolute top-3 left-3 bg-emerald-950/80 backdrop-blur-xs text-amber-300 text-[10px] font-bold px-2.5 py-1 rounded">
+                  Classrooms
+                </span>
+              </div>
+              <div className="p-5 flex-1 flex flex-col justify-between">
+                <div>
+                  <h3 className="font-bold text-white text-base group-hover:text-amber-300 transition-colors">
+                    Modern Classroom Blocks
+                  </h3>
+                  <p className="text-xs text-slate-300 mt-2 leading-relaxed">
+                    Comfortable dual desks, wide chalkboard presentation walls, and naturally lit learning rooms for JSS and SSS.
+                  </p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-emerald-900/60 flex items-center text-xs font-semibold text-amber-400 gap-1">
+                  <span>View Classrooms</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </div>
+              </div>
+            </div>
+
+            {/* Facility 4: Solar Power & Utilities */}
+            <div
+              onClick={() => onNavigate('gallery')}
+              className="group bg-slate-900/80 rounded-2xl overflow-hidden border border-emerald-800/50 hover:border-amber-400/60 transition-all cursor-pointer shadow-lg flex flex-col justify-between"
+            >
+              <div className="relative h-48 overflow-hidden">
+                <img
+                  src="/school-media/solar-power-room.jpg"
+                  alt="24/7 Solar Inverter Power Plant"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                />
+                <span className="absolute top-3 left-3 bg-emerald-950/80 backdrop-blur-xs text-amber-300 text-[10px] font-bold px-2.5 py-1 rounded">
+                  24/7 Power
+                </span>
+              </div>
+              <div className="p-5 flex-1 flex flex-col justify-between">
+                <div>
+                  <h3 className="font-bold text-white text-base group-hover:text-amber-300 transition-colors">
+                    Solar Inverter Power Station
+                  </h3>
+                  <p className="text-xs text-slate-300 mt-2 leading-relaxed">
+                    Heavy-duty battery and inverter plant guaranteeing uninterrupted electricity for computer training, fans, and security lighting.
+                  </p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-emerald-900/60 flex items-center text-xs font-semibold text-amber-400 gap-1">
+                  <span>View Power System</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* 4. ABOUT & PROPRIETOR MESSAGE PREVIEW */}
       <section className="bg-slate-100/70 py-16 sm:py-20 border-y border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -274,8 +432,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <div className="lg:col-span-5 relative">
               <div className="relative rounded-2xl overflow-hidden shadow-xl border-4 border-white bg-slate-900">
                 <img
-                  src="/home.jpg"
-                  alt="Sports Day Celebration with Staff at Peculiar College Doma"
+                  src="/sport.jpg"
+                  alt="Inter-House Sports Championship at Peculiar College Doma"
                   className="w-full h-[420px] object-cover"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-6">
@@ -423,23 +581,23 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {(photos || []).slice(0, 4).map((item) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {((photos && photos.length > 0 ? photos : INITIAL_GALLERY_MEDIA) || []).slice(0, 8).map((item) => (
             <div
               key={item.id}
               onClick={() => handlePhotoSelect(item)}
-              className="group relative h-64 rounded-xl overflow-hidden cursor-pointer shadow-xs border border-slate-200 bg-slate-900"
+              className="group relative h-60 rounded-xl overflow-hidden cursor-pointer shadow-xs border border-slate-200 bg-slate-900 flex flex-col justify-end"
             >
               <img
                 src={item.imageUrl}
                 alt={item.title}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent flex flex-col justify-end p-4 text-white">
-                <span className="text-[10px] uppercase font-bold tracking-wider text-amber-300">
+              <div className="relative z-10 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent p-4 text-white">
+                <span className="text-[10px] uppercase font-bold tracking-wider text-amber-300 bg-emerald-950/80 px-2 py-0.5 rounded backdrop-blur-xs">
                   {item.category}
                 </span>
-                <h4 className="text-sm font-bold text-white line-clamp-1 group-hover:text-amber-300 transition-colors">
+                <h4 className="text-xs sm:text-sm font-bold text-white line-clamp-1 group-hover:text-amber-300 transition-colors mt-1.5">
                   {item.title}
                 </h4>
               </div>
